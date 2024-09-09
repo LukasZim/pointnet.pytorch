@@ -73,7 +73,10 @@ class ShapeNetDataset(data.Dataset):
             for line in f:
                 ls = line.strip().split()
                 self.cat[ls[0]] = ls[1]
-        #print(self.cat)
+        print("self.cat: ", self.cat)
+        print("self.cat.items:", self.cat.items())
+        print("self.cat.keys:", self.cat.keys())
+        print(root)
         if not class_choice is None:
             self.cat = {k: v for k, v in self.cat.items() if k in class_choice}
 
@@ -191,6 +194,71 @@ class ModelNetDataset(data.Dataset):
     def __len__(self):
         return len(self.fns)
 
+class SplatDataset(data.Dataset):
+    def __init__(self, path, split='train', test_ratio = 0.2, npoints=2500, data_augmentation=True):
+        self.points = []
+        self.labels = []
+        self.impulses = []
+        self.npoints = npoints
+        self.data_augmentation = data_augmentation
+
+        for file in os.listdir(path + "/points"):
+            filename = os.fsdecode(file)
+            pcd = []
+            for line in open(path + "/points/" + filename):
+                pcd.append(list(map(lambda x: float(x), line.split(" "))))
+            self.points.append(pcd)
+
+        for file in os.listdir(path + "/points_label"):
+            filename = os.fsdecode(file)
+            labels = []
+            for line in open(path + "/points_label/" + filename):
+                labels.append(int(line))
+            self.labels.append(labels)
+        self.num_seg_classes = np.max(np.array(self.labels)) + 1
+        for file in os.listdir(path + "/impulse_info"):
+            filename = os.fsdecode(file)
+            impulse_info = None
+            for line in open(path + "/impulse_info/" + filename):
+                impulse_info = list(map(lambda x: float(x), line.split(" ")))
+            self.impulses.append(impulse_info)
+
+        split_point = int(len(self.points) * test_ratio)
+        if split == 'test':
+            self.impulses = self.impulses[:split_point]
+            self.labels = self.labels[:split_point]
+            self.points = self.points[:split_point]
+        else:
+            self.impulses = self.impulses[split_point:]
+            self.labels = self.labels[split_point:]
+            self.points = self.points[split_point:]
+    def __len__(self):
+        return len(self.points)
+
+    def __getitem__(self, index):
+        pts = self.points[index]
+        # choice = np.random.choice(len(pts), self.npoints, replace=True)
+        # point_set = pts[choice, :]
+        point_set = pts
+
+        point_set = point_set - np.expand_dims(np.mean(point_set, axis=0), 0)
+        dist = np.max(np.sqrt(np.sum(point_set ** 2, axis=1)), 0)
+        point_set = point_set / dist
+
+        if self.data_augmentation:
+            theta = np.random.uniform(0, np.pi * 2)
+            rotation_matrix = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+            point_set[:, [0, 2]] = point_set[:, [0, 2]].dot(rotation_matrix)
+            point_set += np.random.normal(0, 0.02, size=point_set.shape)
+
+        point_set = torch.from_numpy(np.array(self.points[index]).astype(np.float32))
+        labels = torch.from_numpy(np.array(self.labels[index]).astype(np.int64))
+
+
+        return (point_set,
+                labels,
+                torch.from_numpy(np.array(self.impulses[index]).astype(np.float32)))
+
 if __name__ == '__main__':
     dataset = sys.argv[1]
     datapath = sys.argv[2]
@@ -213,3 +281,13 @@ if __name__ == '__main__':
         print(len(d))
         print(d[0])
 
+    if dataset == 'splat':
+        d = SplatDataset(datapath)
+        print(len(d))
+        print(d[0])
+        ps, cls, impulse = d[0]
+        print(ps.size(), ps.type())
+        print()
+        print(cls.size(),cls.type())
+        print()
+        print(impulse, impulse.type())

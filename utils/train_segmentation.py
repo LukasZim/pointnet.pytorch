@@ -6,7 +6,7 @@ import torch
 import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
-from pointnet.dataset import ShapeNetDataset
+from pointnet.dataset import ShapeNetDataset, SplatDataset
 from pointnet.model import PointNetDenseCls, feature_transform_regularizer
 import torch.nn.functional as F
 from tqdm import tqdm
@@ -42,36 +42,49 @@ labels_list_test = []
 impulse_info_list = []
 impulse_info_test = []
 if opt.dataset_type == "splat":
-    for file in os.listdir(opt.dataset + "/points"):
-        filename = os.fsdecode(file)
-        pcd = []
-        for line in open(opt.dataset + "/points/" + filename):
-            pcd.append(list(map(lambda x: float(x), line.split(" "))))
-        pcd_list.append(pcd)
+    # for file in os.listdir(opt.dataset + "/points"):
+    #     filename = os.fsdecode(file)
+    #     pcd = []
+    #     for line in open(opt.dataset + "/points/" + filename):
+    #         pcd.append(list(map(lambda x: float(x), line.split(" "))))
+    #     pcd_list.append(pcd)
+    #
+    # for file in os.listdir(opt.dataset + "/points_label"):
+    #     filename = os.fsdecode(file)
+    #     labels = []
+    #     for line in open(opt.dataset + "/points_label/" + filename):
+    #         labels.append(int(line))
+    #     labels_list.append(labels)
+    #
+    # for file in os.listdir(opt.dataset + "/impulse_info"):
+    #     filename = os.fsdecode(file)
+    #     impulse_info = None
+    #     for line in open(opt.dataset + "/impulse_info/" + filename):
+    #         impulse_info = list(map(lambda x: float(x), line.split(" ")))
+    #     impulse_info_list.append(impulse_info)
+    #
+    # eighty_percent_index = int(len(pcd_list) * 0.8)
+    # pcd_list_test = pcd_list[eighty_percent_index:]
+    # pcd_list = pcd_list[:eighty_percent_index]
+    #
+    # labels_list_test = labels_list[eighty_percent_index:]
+    # labels_list = labels_list[:eighty_percent_index]
+    #
+    # impulse_info_test = impulse_info_list[eighty_percent_index:]
+    # impulse_info_list = impulse_info_list[:eighty_percent_index]
+    dataset = SplatDataset(opt.dataset,
+                           split='train')
+    dataloader = torch.utils.data.DataLoader(dataset,
+                     batch_size=opt.batchSize,
+                     shuffle=True,
+                     num_workers=int(opt.workers))
 
-    for file in os.listdir(opt.dataset + "/points_label"):
-        filename = os.fsdecode(file)
-        labels = []
-        for line in open(opt.dataset + "/points_label/" + filename):
-            labels.append(int(line))
-        labels_list.append(labels)
-
-    for file in os.listdir(opt.dataset + "/impulse_info"):
-        filename = os.fsdecode(file)
-        impulse_info = None
-        for line in open(opt.dataset + "/impulse_info/" + filename):
-            impulse_info = list(map(lambda x: float(x), line.split(" ")))
-        impulse_info_list.append(impulse_info)
-
-    eighty_percent_index = int(len(pcd_list) * 0.8)
-    pcd_list_test = pcd_list[eighty_percent_index:]
-    pcd_list = pcd_list[:eighty_percent_index]
-
-    labels_list_test = labels_list[eighty_percent_index:]
-    labels_list = labels_list[:eighty_percent_index]
-
-    impulse_info_test = impulse_info_list[eighty_percent_index:]
-    impulse_info_list = impulse_info_list[:eighty_percent_index]
+    test_dataset = SplatDataset(opt.dataset,
+                           split='test')
+    testdataloader = torch.utils.data.DataLoader(test_dataset,
+                     batch_size=opt.batchSize,
+                     shuffle=True,
+                     num_workers=int(opt.workers))
 
 else:
 # retrieving dataset and dataloaders
@@ -99,8 +112,8 @@ else:
 #         num_workers=int(opt.workers))
 
 # setting up directories
-print(len(pcd_list), len(pcd_list_test))
-num_classes = np.max(np.array(labels_list))
+print(len(pcd_list), len(test_dataset))
+num_classes = dataset.num_seg_classes
 print('classes', num_classes)
 try:
     os.makedirs(opt.outf)
@@ -116,17 +129,17 @@ if opt.model != '':
 
 optimizer = optim.Adam(classifier.parameters(), lr=0.001, betas=(0.9, 0.999))
 scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.5)
+print(torch.cuda.is_available())
 classifier.cuda()
 
-num_batch = len(pcd_list) / opt.batchSize
+num_batch = len(dataset) / opt.batchSize
 
 # starting the training
 for epoch in range(opt.nepoch):
 
     # going over the dataset
-    for i in enumerate(len(pcd_list), 0):
-        points = pcd_list[i]
-        target = labels_list[i]
+    for i, data in enumerate(dataloader, 0):
+        points, target = data
         points = points.transpose(2, 1)
         points, target = points.cuda(), target.cuda()
         optimizer.zero_grad()
