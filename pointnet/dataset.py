@@ -211,11 +211,12 @@ class SplatDataset(data.Dataset):
 
         for file in os.listdir(path + "/points_label"):
             filename = os.fsdecode(file)
-            labels = []
+            label = []
             for line in open(path + "/points_label/" + filename):
-                labels.append(int(line))
-            self.labels.append(labels)
+                label.append(int(line))
+            self.labels.append(label)
         self.num_seg_classes = np.max(np.array(self.labels)) + 1
+        print("Label max:", np.max(self.labels), "Label min:", np.min(self.labels))
         for file in os.listdir(path + "/impulse_info"):
             filename = os.fsdecode(file)
             impulse_info = None
@@ -225,21 +226,22 @@ class SplatDataset(data.Dataset):
 
         split_point = int(len(self.points) * test_ratio)
         if split == 'test':
-            self.impulses = self.impulses[:split_point]
-            self.labels = self.labels[:split_point]
-            self.points = self.points[:split_point]
+            self.impulses = np.array(self.impulses[:split_point])
+            self.labels = np.array(self.labels[:split_point])
+            self.points = np.array(self.points[:split_point])
         else:
-            self.impulses = self.impulses[split_point:]
-            self.labels = self.labels[split_point:]
-            self.points = self.points[split_point:]
+            self.impulses = np.array(self.impulses[split_point:])
+            self.labels = np.array(self.labels[split_point:])
+            self.points = np.array(self.points[split_point:])
     def __len__(self):
         return len(self.points)
 
     def __getitem__(self, index):
-        pts = self.points[index]
-        # choice = np.random.choice(len(pts), self.npoints, replace=True)
-        # point_set = pts[choice, :]
-        point_set = pts
+        pts = np.array(self.points[index])
+        # print("size is this: ", pts.nbytes)
+        choice = np.random.choice(len(pts), self.npoints, replace=True)
+        point_set = pts[choice, :]
+        # point_set = pts
 
         point_set = point_set - np.expand_dims(np.mean(point_set, axis=0), 0)
         dist = np.max(np.sqrt(np.sum(point_set ** 2, axis=1)), 0)
@@ -251,9 +253,10 @@ class SplatDataset(data.Dataset):
             point_set[:, [0, 2]] = point_set[:, [0, 2]].dot(rotation_matrix)
             point_set += np.random.normal(0, 0.02, size=point_set.shape)
 
-        point_set = torch.from_numpy(np.array(self.points[index]).astype(np.float32))
-        labels = torch.from_numpy(np.array(self.labels[index]).astype(np.int64))
-
+        # point_set = torch.from_numpy(np.array(self.points[index]).astype(np.float32))
+        # labels = torch.from_numpy(np.array(self.labels[index]).astype(np.int64))
+        point_set = torch.from_numpy(np.float32(point_set))
+        labels = torch.from_numpy(self.labels[index][choice])
 
         return (point_set,
                 labels,

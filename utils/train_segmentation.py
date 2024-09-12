@@ -15,7 +15,7 @@ import numpy as np
 # parsing arguments
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    '--batchSize', type=int, default=32, help='input batch size')
+    '--batchSize', type=int, default=16, help='input batch size')
 parser.add_argument(
     '--workers', type=int, help='number of data loading workers', default=4)
 parser.add_argument(
@@ -35,43 +35,8 @@ opt.manualSeed = random.randint(1, 10000)  # fix seed
 print("Random Seed: ", opt.manualSeed)
 random.seed(opt.manualSeed)
 torch.manual_seed(opt.manualSeed)
-pcd_list = []
-pcd_list_test = []
-labels_list = []
-labels_list_test = []
-impulse_info_list = []
-impulse_info_test = []
+
 if opt.dataset_type == "splat":
-    # for file in os.listdir(opt.dataset + "/points"):
-    #     filename = os.fsdecode(file)
-    #     pcd = []
-    #     for line in open(opt.dataset + "/points/" + filename):
-    #         pcd.append(list(map(lambda x: float(x), line.split(" "))))
-    #     pcd_list.append(pcd)
-    #
-    # for file in os.listdir(opt.dataset + "/points_label"):
-    #     filename = os.fsdecode(file)
-    #     labels = []
-    #     for line in open(opt.dataset + "/points_label/" + filename):
-    #         labels.append(int(line))
-    #     labels_list.append(labels)
-    #
-    # for file in os.listdir(opt.dataset + "/impulse_info"):
-    #     filename = os.fsdecode(file)
-    #     impulse_info = None
-    #     for line in open(opt.dataset + "/impulse_info/" + filename):
-    #         impulse_info = list(map(lambda x: float(x), line.split(" ")))
-    #     impulse_info_list.append(impulse_info)
-    #
-    # eighty_percent_index = int(len(pcd_list) * 0.8)
-    # pcd_list_test = pcd_list[eighty_percent_index:]
-    # pcd_list = pcd_list[:eighty_percent_index]
-    #
-    # labels_list_test = labels_list[eighty_percent_index:]
-    # labels_list = labels_list[:eighty_percent_index]
-    #
-    # impulse_info_test = impulse_info_list[eighty_percent_index:]
-    # impulse_info_list = impulse_info_list[:eighty_percent_index]
     dataset = SplatDataset(opt.dataset,
                            split='train')
     dataloader = torch.utils.data.DataLoader(dataset,
@@ -88,31 +53,31 @@ if opt.dataset_type == "splat":
 
 else:
 # retrieving dataset and dataloaders
-    raise Exception("Not used in current build")
-#     dataset = ShapeNetDataset(
-#         root=opt.dataset,
-#         classification=False,
-#         class_choice=[opt.class_choice])
-#     dataloader = torch.utils.data.DataLoader(
-#         dataset,
-#         batch_size=opt.batchSize,
-#         shuffle=True,
-#         num_workers=int(opt.workers))
-#
-#     test_dataset = ShapeNetDataset(
-#         root=opt.dataset,
-#         classification=False,
-#         class_choice=[opt.class_choice],
-#         split='test',
-#         data_augmentation=False)
-#     testdataloader = torch.utils.data.DataLoader(
-#         test_dataset,
-#         batch_size=opt.batchSize,
-#         shuffle=True,
-#         num_workers=int(opt.workers))
+#     raise Exception("Not used in current build")
+    dataset = ShapeNetDataset(
+        root=opt.dataset,
+        classification=False,
+        class_choice=[opt.class_choice])
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=opt.batchSize,
+        shuffle=True,
+        num_workers=int(opt.workers))
+
+    test_dataset = ShapeNetDataset(
+        root=opt.dataset,
+        classification=False,
+        class_choice=[opt.class_choice],
+        split='test',
+        data_augmentation=False)
+    testdataloader = torch.utils.data.DataLoader(
+        test_dataset,
+        batch_size=opt.batchSize,
+        shuffle=True,
+        num_workers=int(opt.workers))
 
 # setting up directories
-print(len(pcd_list), len(test_dataset))
+print(len(dataset), len(test_dataset))
 num_classes = dataset.num_seg_classes
 print('classes', num_classes)
 try:
@@ -139,15 +104,27 @@ for epoch in range(opt.nepoch):
 
     # going over the dataset
     for i, data in enumerate(dataloader, 0):
-        points, target = data
+        points, target, impulses = data
         points = points.transpose(2, 1)
         points, target = points.cuda(), target.cuda()
         optimizer.zero_grad()
         classifier = classifier.train()
         pred, trans, trans_feat = classifier(points)
         pred = pred.view(-1, num_classes)
-        target = target.view(-1, 1)[:, 0] - 1
-        #print(pred.size(), target.size())
+        target = target.view(-1, 1)[:, 0]
+
+        # print("num_classes:", num_classes)
+        #
+        # print("Pred shape:", pred.shape)  # Should be [batch_size, num_classes, ...]
+        # print("Target shape:", target.shape)  # Should be [batch_size, ...]
+        #
+        # print("Minimum target:", torch.min(target))
+        # print("Maximum target:", torch.max(target))
+
+        # Assuming 'num_classes' is the number of output classes in your model
+        assert torch.min(target) >= 0, f"Target contains negative values: {torch.min(target)}"
+        assert torch.max(target) < num_classes, f"Target contains values out of range: {torch.max(target)}"
+
         loss = F.nll_loss(pred, target)
         if opt.feature_transform:
             loss += feature_transform_regularizer(trans_feat) * 0.001
@@ -159,13 +136,13 @@ for epoch in range(opt.nepoch):
 
         if i % 10 == 0:
             j, data = next(enumerate(testdataloader, 0))
-            points, target = data
+            points, target, impulse = data
             points = points.transpose(2, 1)
             points, target = points.cuda(), target.cuda()
             classifier = classifier.eval()
             pred, _, _ = classifier(points)
             pred = pred.view(-1, num_classes)
-            target = target.view(-1, 1)[:, 0] - 1
+            target = target.view(-1, 1)[:, 0]
             loss = F.nll_loss(pred, target)
             pred_choice = pred.data.max(1)[1]
             correct = pred_choice.eq(target.data).cpu().sum()
@@ -178,7 +155,7 @@ for epoch in range(opt.nepoch):
 ## benchmark mIOU
 shape_ious = []
 for i,data in tqdm(enumerate(testdataloader, 0)):
-    points, target = data
+    points, target, impulse = data
     points = points.transpose(2, 1)
     points, target = points.cuda(), target.cuda()
     classifier = classifier.eval()

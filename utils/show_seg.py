@@ -6,7 +6,7 @@ import torch
 import torch.nn.parallel
 import torch.utils.data
 from torch.autograd import Variable
-from pointnet.dataset import ShapeNetDataset
+from pointnet.dataset import ShapeNetDataset, SplatDataset
 from pointnet.model import PointNetDenseCls
 import matplotlib.pyplot as plt
 
@@ -23,16 +23,18 @@ parser.add_argument('--class_choice', type=str, default='', help='class choice')
 opt = parser.parse_args()
 print(opt)
 
-d = ShapeNetDataset(
-    root=opt.dataset,
-    class_choice=[opt.class_choice],
-    split='test',
-    data_augmentation=False)
+# d = ShapeNetDataset(
+#     root=opt.dataset,
+#     class_choice=[opt.class_choice],
+#     split='test',
+#     data_augmentation=False)
+
+d = SplatDataset(path=opt.dataset, split="test", data_augmentation=False)
 
 idx = opt.idx
 
 print("model %d/%d" % (idx, len(d)))
-point, seg = d[idx]
+point, seg, impulse = d[idx]
 print(point.size(), seg.size())
 point_np = point.numpy()
 
