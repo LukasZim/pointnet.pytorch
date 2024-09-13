@@ -7,7 +7,7 @@ import torch.nn.parallel
 import torch.optim as optim
 import torch.utils.data
 from pointnet.dataset import ShapeNetDataset, SplatDataset
-from pointnet.model import PointNetDenseCls, feature_transform_regularizer
+from pointnet.model import PointNetDenseCls, feature_transform_regularizer, SplatNetDenseCls
 import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
@@ -87,7 +87,7 @@ except OSError:
 blue = lambda x: '\033[94m' + x + '\033[0m'
 
 # setting up the model
-classifier = PointNetDenseCls(k=num_classes, feature_transform=opt.feature_transform)
+classifier = SplatNetDenseCls(k=num_classes, feature_transform=opt.feature_transform)
 
 if opt.model != '':
     classifier.load_state_dict(torch.load(opt.model))

@@ -7,7 +7,7 @@ import torch.nn.parallel
 import torch.utils.data
 from torch.autograd import Variable
 from pointnet.dataset import ShapeNetDataset, SplatDataset
-from pointnet.model import PointNetDenseCls
+from pointnet.model import PointNetDenseCls, SplatNetDenseCls
 import matplotlib.pyplot as plt
 
 
@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--model', type=str, default='', help='model path')
-parser.add_argument('--idx', type=int, default=0, help='model index')
+parser.add_argument('--idx', type=int, default=10, help='model index')
 parser.add_argument('--dataset', type=str, default='', help='dataset path')
 parser.add_argument('--class_choice', type=str, default='', help='class choice')
 
@@ -43,7 +43,7 @@ cmap = np.array([cmap(i) for i in range(10)])[:, :3]
 gt = cmap[seg.numpy() - 1, :]
 
 state_dict = torch.load(opt.model)
-classifier = PointNetDenseCls(k= state_dict['conv4.weight'].size()[0])
+classifier = SplatNetDenseCls(k= state_dict['conv4.weight'].size()[0])
 classifier.load_state_dict(state_dict)
 classifier.eval()
 
@@ -58,4 +58,4 @@ print(pred_choice)
 pred_color = cmap[pred_choice.numpy()[0], :]
 
 #print(pred_color.shape)
-showpoints(point_np, gt, pred_color)
+showpoints(point_np[:,:3], gt, pred_color)

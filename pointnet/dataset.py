@@ -68,7 +68,8 @@ class ShapeNetDataset(data.Dataset):
         self.data_augmentation = data_augmentation
         self.classification = classification
         self.seg_classes = {}
-        
+
+
         with open(self.catfile, 'r') as f:
             for line in f:
                 ls = line.strip().split()
@@ -201,43 +202,95 @@ class SplatDataset(data.Dataset):
         self.impulses = []
         self.npoints = npoints
         self.data_augmentation = data_augmentation
+        self.combined = []
+        self.filenames_points = []
+        self.filenames_labels = []
+        self.filenames_impulses = []
 
+        max_index = 0
         for file in os.listdir(path + "/points"):
             filename = os.fsdecode(file)
+            index = filename.split("0")
+            if index > max_index:
+                max_index = index
+
+        for index in range(max_index):
+            filename = str(index) + ".pcd"
             pcd = []
             for line in open(path + "/points/" + filename):
                 pcd.append(list(map(lambda x: float(x), line.split(" "))))
             self.points.append(pcd)
+            self.filenames_points.append(index)
 
-        for file in os.listdir(path + "/points_label"):
-            filename = os.fsdecode(file)
+            filename = str(index) + ".seg"
             label = []
             for line in open(path + "/points_label/" + filename):
                 label.append(int(line))
             self.labels.append(label)
-        self.num_seg_classes = np.max(np.array(self.labels)) + 1
-        print("Label max:", np.max(self.labels), "Label min:", np.min(self.labels))
-        for file in os.listdir(path + "/impulse_info"):
-            filename = os.fsdecode(file)
+            self.filenames_labels.append(index)
+
+            filename = str(index) + ".imp"
             impulse_info = None
             for line in open(path + "/impulse_info/" + filename):
                 impulse_info = list(map(lambda x: float(x), line.split(" ")))
             self.impulses.append(impulse_info)
+            self.filenames_impulses.append(index)
+        # for file in os.listdir(path + "/points"):
+        #     filename = os.fsdecode(file)
+        #     pcd = []
+        #     for line in open(path + "/points/" + filename):
+        #         pcd.append(list(map(lambda x: float(x), line.split(" "))))
+        #     self.points.append(pcd)
+        #     self.filenames_points.append(filename.split('.')[0])
+
+        # for file in os.listdir(path + "/points_label"):
+        #     filename = os.fsdecode(file)
+        #     label = []
+        #     for line in open(path + "/points_label/" + filename):
+        #         label.append(int(line))
+        #     self.labels.append(label)
+        #     self.filenames_labels.append(filename.split('.')[0])
+
+        self.num_seg_classes = np.max(np.array(self.labels)) + 1
+        print("Label max:", np.max(self.labels), "Label min:", np.min(self.labels))
+
+
+        # for file in os.listdir(path + "/impulse_info"):
+        #     filename = os.fsdecode(file)
+        #     impulse_info = None
+        #     for line in open(path + "/impulse_info/" + filename):
+        #         impulse_info = list(map(lambda x: float(x), line.split(" ")))
+        #     self.impulses.append(impulse_info)
+        #     self.filenames_impulses.append(filename.split('.')[0])
+
+        for index, pcd in enumerate(self.points):
+            combined_pcd = []
+            for point in pcd:
+                combined_pcd.append(point + self.impulses[index])
+            self.combined.append(combined_pcd)
 
         split_point = int(len(self.points) * test_ratio)
         if split == 'test':
             self.impulses = np.array(self.impulses[:split_point])
             self.labels = np.array(self.labels[:split_point])
             self.points = np.array(self.points[:split_point])
+            self.combined = np.array(self.combined[:split_point])
+            self.filenames_points = np.array(self.filenames_points[:split_point])
+            self.filenames_labels = np.array(self.filenames_labels[:split_point])
+            self.filenames_impulses = np.array(self.filenames_impulses[:split_point])
         else:
             self.impulses = np.array(self.impulses[split_point:])
             self.labels = np.array(self.labels[split_point:])
             self.points = np.array(self.points[split_point:])
+            self.combined = np.array(self.combined[split_point:])
+            self.filenames_points = np.array(self.filenames_points[split_point:])
+            self.filenames_labels = np.array(self.filenames_labels[split_point:])
+            self.filenames_impulses = np.array(self.filenames_impulses[split_point:])
     def __len__(self):
         return len(self.points)
 
     def __getitem__(self, index):
-        pts = np.array(self.points[index])
+        pts = np.array(self.combined[index])
         # print("size is this: ", pts.nbytes)
         choice = np.random.choice(len(pts), self.npoints, replace=True)
         point_set = pts[choice, :]
