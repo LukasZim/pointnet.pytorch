@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser()
 
 parser.add_argument('--model', type=str, default='', help='model path')
-parser.add_argument('--idx', type=int, default=10, help='model index')
+parser.add_argument('--idx', type=int, default=0, help='model index')
 parser.add_argument('--dataset', type=str, default='', help='dataset path')
 parser.add_argument('--class_choice', type=str, default='', help='class choice')
 

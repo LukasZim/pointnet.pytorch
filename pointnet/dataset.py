@@ -210,11 +210,13 @@ class SplatDataset(data.Dataset):
         max_index = 0
         for file in os.listdir(path + "/points"):
             filename = os.fsdecode(file)
-            index = filename.split("0")
+            index = int(filename.split(".")[0])
             if index > max_index:
                 max_index = index
 
-        for index in range(max_index):
+        max_index += 1
+
+        for index in range(0,max_index):
             filename = str(index) + ".pcd"
             pcd = []
             for line in open(path + "/points/" + filename):
@@ -235,33 +237,10 @@ class SplatDataset(data.Dataset):
                 impulse_info = list(map(lambda x: float(x), line.split(" ")))
             self.impulses.append(impulse_info)
             self.filenames_impulses.append(index)
-        # for file in os.listdir(path + "/points"):
-        #     filename = os.fsdecode(file)
-        #     pcd = []
-        #     for line in open(path + "/points/" + filename):
-        #         pcd.append(list(map(lambda x: float(x), line.split(" "))))
-        #     self.points.append(pcd)
-        #     self.filenames_points.append(filename.split('.')[0])
-
-        # for file in os.listdir(path + "/points_label"):
-        #     filename = os.fsdecode(file)
-        #     label = []
-        #     for line in open(path + "/points_label/" + filename):
-        #         label.append(int(line))
-        #     self.labels.append(label)
-        #     self.filenames_labels.append(filename.split('.')[0])
 
         self.num_seg_classes = np.max(np.array(self.labels)) + 1
         print("Label max:", np.max(self.labels), "Label min:", np.min(self.labels))
 
-
-        # for file in os.listdir(path + "/impulse_info"):
-        #     filename = os.fsdecode(file)
-        #     impulse_info = None
-        #     for line in open(path + "/impulse_info/" + filename):
-        #         impulse_info = list(map(lambda x: float(x), line.split(" ")))
-        #     self.impulses.append(impulse_info)
-        #     self.filenames_impulses.append(filename.split('.')[0])
 
         for index, pcd in enumerate(self.points):
             combined_pcd = []
@@ -269,8 +248,11 @@ class SplatDataset(data.Dataset):
                 combined_pcd.append(point + self.impulses[index])
             self.combined.append(combined_pcd)
 
+
         split_point = int(len(self.points) * test_ratio)
         if split == 'test':
+            # split_point = len(self.points) - split_point
+
             self.impulses = np.array(self.impulses[:split_point])
             self.labels = np.array(self.labels[:split_point])
             self.points = np.array(self.points[:split_point])
@@ -279,6 +261,7 @@ class SplatDataset(data.Dataset):
             self.filenames_labels = np.array(self.filenames_labels[:split_point])
             self.filenames_impulses = np.array(self.filenames_impulses[:split_point])
         else:
+            # split_point = 0
             self.impulses = np.array(self.impulses[split_point:])
             self.labels = np.array(self.labels[split_point:])
             self.points = np.array(self.points[split_point:])
