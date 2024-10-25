@@ -14,21 +14,31 @@ import numpy as np
 
 # parsing arguments
 parser = argparse.ArgumentParser()
-parser.add_argument(
-    '--batchSize', type=int, default=16, help='input batch size')
-parser.add_argument(
-    '--workers', type=int, help='number of data loading workers', default=4)
-parser.add_argument(
-    '--nepoch', type=int, default=25, help='number of epochs to train for')
-parser.add_argument('--outf', type=str, default='seg', help='output folder')
-parser.add_argument('--model', type=str, default='', help='model path')
-parser.add_argument('--dataset', type=str, required=True, help="dataset path")
-parser.add_argument('--class_choice', type=str, default='Chair', help="class_choice")
-parser.add_argument('--feature_transform', action='store_true', help="use feature transform")
-parser.add_argument('--dataset_type', type=str, default='splat', help="dataset type splat|shapenet|modelnet40")
-
+# parser.add_argument(
+#     '--batchSize', type=int, default=16, help='input batch size')
+# parser.add_argument(
+#     '--workers', type=int, help='number of data loading workers', default=4)
+# parser.add_argument(
+#     '--nepoch', type=int, default=1000, help='number of epochs to train for')
+# parser.add_argument('--outf', type=str, default='seg', help='output folder')
+# parser.add_argument('--model', type=str, default='', help='model path')
+# parser.add_argument('--dataset', type=str, required=True, help="dataset path")
+# parser.add_argument('--class_choice', type=str, default='Chair', help="class_choice")
+# parser.add_argument('--feature_transform', action='store_true', help="use feature transform")
+# parser.add_argument('--dataset_type', type=str, default='splat', help="dataset type splat|shapenet|modelnet40")
+#
 opt = parser.parse_args()
 print(opt)
+
+opt.batchSize = 16
+opt.workers = 8
+opt.nepoch = 1000
+opt.outf = "seg"
+opt.model = ""
+opt.dataset = "/home/lukasz/Documents/thesis_pointcloud/dataset/chair"
+opt.class_choice = "Chair"
+opt.dataset_type = "splat"
+opt.feature_transform = False
 
 # setting seed
 opt.manualSeed = random.randint(1, 10000)  # fix seed
@@ -113,19 +123,18 @@ for epoch in range(opt.nepoch):
         pred = pred.view(-1, num_classes)
         target = target.view(-1, 1)[:, 0]
 
-        # print("num_classes:", num_classes)
-        #
-        # print("Pred shape:", pred.shape)  # Should be [batch_size, num_classes, ...]
-        # print("Target shape:", target.shape)  # Should be [batch_size, ...]
-        #
-        # print("Minimum target:", torch.min(target))
-        # print("Maximum target:", torch.max(target))
+        _,class_counts = torch.unique(target, return_counts=True)
+        class_counts = class_counts.tolist()
+        total_samples = sum(class_counts)
+        class_weights = [total_samples / class_count for class_count in class_counts]
+        class_weights.extend([1000.0] * (num_classes - len(class_weights)))
+        weights_tensor = torch.tensor(class_weights, dtype=torch.float32).cuda()
 
         # Assuming 'num_classes' is the number of output classes in your model
         assert torch.min(target) >= 0, f"Target contains negative values: {torch.min(target)}"
         assert torch.max(target) < num_classes, f"Target contains values out of range: {torch.max(target)}"
 
-        loss = F.nll_loss(pred, target)
+        loss = F.nll_loss(pred, target, weight=weights_tensor)
         if opt.feature_transform:
             loss += feature_transform_regularizer(trans_feat) * 0.001
         loss.backward()

@@ -1,4 +1,7 @@
 from __future__ import print_function
+
+import time
+
 import torch.utils.data as data
 import os
 import os.path
@@ -208,46 +211,65 @@ class SplatDataset(data.Dataset):
         self.filenames_impulses = []
 
         max_index = 0
-        for file in os.listdir(path + "/points"):
+        for file in tqdm(os.listdir(path + "/points")):
             filename = os.fsdecode(file)
             index = int(filename.split(".")[0])
             if index > max_index:
                 max_index = index
 
         max_index += 1
+        # with open(path + "/points/" + "0.pcd") as f:
+        #     pcd = [list(map(float, line.split())) for line in f]
 
-        for index in range(0,max_index):
+        pcd = np.loadtxt(path + "/points/" + "0.pcd")
+
+
+        for index in tqdm(range(0,max_index)):
             filename = str(index) + ".pcd"
-            pcd = []
-            for line in open(path + "/points/" + filename):
-                pcd.append(list(map(lambda x: float(x), line.split(" "))))
+            # pcd = []
+            # for line in open(path + "/points/" + filename):
+            #     pcd.append(list(map(lambda x: float(x), line.split(" "))))
+
+            # with open(path + "/points/" + filename) as f:
+            #     pcd = [list(map(float, line.split())) for line in f]
+
+            # with open(path + "/points/" + filename) as f:
+            #     pcd = [list(map(float, line.split())) for line in f]
             self.points.append(pcd)
             self.filenames_points.append(index)
 
             filename = str(index) + ".seg"
-            label = []
-            for line in open(path + "/points_label/" + filename):
-                label.append(int(line))
+            # label = []
+            # for line in open(path + "/points_label/" + filename):
+            #     label.append(int(line))
+
+            with open(path + "/points_label/" + filename) as f:
+                label = [int(line) for line in f]
             self.labels.append(label)
             self.filenames_labels.append(index)
 
             filename = str(index) + ".imp"
-            impulse_info = None
-            for line in open(path + "/impulse_info/" + filename):
-                impulse_info = list(map(lambda x: float(x), line.split(" ")))
+            # impulse_info = None
+            # for line in open(path + "/impulse_info/" + filename):
+            #     impulse_info = list(map(lambda x: float(x), line.split(" ")))
+
+            with open(path + "/impulse_info/" + filename) as f:
+                impulse_info = [list(map(float, line.split())) for line in f][0]
+
             self.impulses.append(impulse_info)
             self.filenames_impulses.append(index)
 
         self.num_seg_classes = np.max(np.array(self.labels)) + 1
         print("Label max:", np.max(self.labels), "Label min:", np.min(self.labels))
 
-
+        time_start = time.time()
         for index, pcd in enumerate(self.points):
             combined_pcd = []
             for point in pcd:
-                combined_pcd.append(point + self.impulses[index])
+                corresponding_impulse = self.impulses[index]
+                combined_pcd.append(point + corresponding_impulse)
             self.combined.append(combined_pcd)
-
+        print("appending impulse takes this long: ", time.time()-time_start)
 
         split_point = int(len(self.points) * test_ratio)
         if split == 'test':
