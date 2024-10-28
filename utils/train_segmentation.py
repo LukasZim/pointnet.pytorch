@@ -127,7 +127,7 @@ for epoch in range(opt.nepoch):
         class_counts = class_counts.tolist()
         total_samples = sum(class_counts)
         class_weights = [total_samples / class_count for class_count in class_counts]
-        class_weights.extend([1000.0] * (num_classes - len(class_weights)))
+        class_weights.extend([100000.0] * (num_classes - len(class_weights)))
         weights_tensor = torch.tensor(class_weights, dtype=torch.float32).cuda()
 
         # Assuming 'num_classes' is the number of output classes in your model
@@ -159,7 +159,8 @@ for epoch in range(opt.nepoch):
     scheduler.step()
     print(opt.outf, opt.class_choice, epoch)
     print('%s/seg_model_%s_%d.pth' % (opt.outf, opt.class_choice, epoch))
-    torch.save(classifier.state_dict(), '%s/seg_model_%s_%d.pth' % (opt.outf, opt.class_choice, epoch))
+    if epoch % 25 == 0:
+        torch.save(classifier.state_dict(), '%s/seg_model_%s_%d.pth' % (opt.outf, opt.class_choice, epoch))
 
 ## benchmark mIOU
 shape_ious = []

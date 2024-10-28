@@ -23,7 +23,7 @@ parser = argparse.ArgumentParser()
 # parser.add_argument('--class_choice', type=str, default='', help='class choice')
 
 opt = parser.parse_args()
-opt.model = "/home/lukasz/Documents/pointnet.pytorch/utils/seg/seg_model_Chair_999.pth"
+opt.model = "/home/lukasz/Documents/pointnet.pytorch/utils/seg/seg_model_Chair_975.pth"
 opt.dataset = "/home/lukasz/Documents/thesis_pointcloud/dataset/chair"
 opt.idx = 1
 opt.class_choice = ""

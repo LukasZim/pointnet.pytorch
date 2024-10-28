@@ -200,9 +200,9 @@ class ModelNetDataset(data.Dataset):
 
 class SplatDataset(data.Dataset):
     def __init__(self, path, split='train', test_ratio = 0.2, npoints=2500, data_augmentation=True):
-        self.points = []
+        # self.points = []
         self.labels = []
-        self.impulses = []
+
         self.npoints = npoints
         self.data_augmentation = data_augmentation
         self.combined = []
@@ -217,59 +217,40 @@ class SplatDataset(data.Dataset):
             if index > max_index:
                 max_index = index
 
-        max_index += 1
-        # with open(path + "/points/" + "0.pcd") as f:
-        #     pcd = [list(map(float, line.split())) for line in f]
-
         pcd = np.loadtxt(path + "/points/" + "0.pcd")
+        self.points = np.tile(pcd, (max_index + 1, 1, 1))
+        self.impulses = np.empty((0, 6), float)
 
-
-        for index in tqdm(range(0,max_index)):
-            filename = str(index) + ".pcd"
-            # pcd = []
-            # for line in open(path + "/points/" + filename):
-            #     pcd.append(list(map(lambda x: float(x), line.split(" "))))
-
-            # with open(path + "/points/" + filename) as f:
-            #     pcd = [list(map(float, line.split())) for line in f]
-
-            # with open(path + "/points/" + filename) as f:
-            #     pcd = [list(map(float, line.split())) for line in f]
-            self.points.append(pcd)
+        for index in tqdm(range(0,max_index + 1)): # max_index is one less than the number of files, since we start at 0
+            # self.points.append(pcd)
             self.filenames_points.append(index)
 
             filename = str(index) + ".seg"
-            # label = []
-            # for line in open(path + "/points_label/" + filename):
-            #     label.append(int(line))
-
-            with open(path + "/points_label/" + filename) as f:
-                label = [int(line) for line in f]
+            label = np.loadtxt(path + "/points_label/" + filename).astype(int)
             self.labels.append(label)
             self.filenames_labels.append(index)
 
             filename = str(index) + ".imp"
-            # impulse_info = None
-            # for line in open(path + "/impulse_info/" + filename):
-            #     impulse_info = list(map(lambda x: float(x), line.split(" ")))
-
-            with open(path + "/impulse_info/" + filename) as f:
-                impulse_info = [list(map(float, line.split())) for line in f][0]
-
-            self.impulses.append(impulse_info)
+            impulse_info = np.loadtxt(path + "/impulse_info/" + filename)
+            self.impulses = np.vstack([self.impulses, impulse_info])
             self.filenames_impulses.append(index)
 
         self.num_seg_classes = np.max(np.array(self.labels)) + 1
         print("Label max:", np.max(self.labels), "Label min:", np.min(self.labels))
 
+        # time_start = time.time()
+        # for index, pcd in enumerate(self.points):
+        #     combined_pcd = []
+        #     for point in pcd:
+        #         corresponding_impulse = self.impulses[index]
+        #         combined_pcd.append(point + corresponding_impulse)
+        #     self.combined.append(combined_pcd)
+        # print("appending impulse takes this long: ", time.time()-time_start)
+
         time_start = time.time()
-        for index, pcd in enumerate(self.points):
-            combined_pcd = []
-            for point in pcd:
-                corresponding_impulse = self.impulses[index]
-                combined_pcd.append(point + corresponding_impulse)
-            self.combined.append(combined_pcd)
-        print("appending impulse takes this long: ", time.time()-time_start)
+        corresponding_impulses = np.tile(self.impulses[:, np.newaxis, :], (1, self.points.shape[1], 1))
+        self.combined = np.concatenate([self.points, corresponding_impulses], axis=2)
+        print("appending impulse takes this long: ", time.time() - time_start)
 
         split_point = int(len(self.points) * test_ratio)
         if split == 'test':
