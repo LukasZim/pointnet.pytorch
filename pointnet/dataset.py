@@ -211,13 +211,13 @@ class SplatDataset(data.Dataset):
         self.filenames_impulses = []
 
         max_index = 0
-        for file in tqdm(os.listdir(path + "/points")):
+        for file in tqdm(os.listdir(path + "/impulse_info")):
             filename = os.fsdecode(file)
             index = int(filename.split(".")[0])
             if index > max_index:
                 max_index = index
 
-        pcd = np.loadtxt(path + "/points/" + "0.pcd")
+        pcd = np.loadtxt(path + "/pointcloud.pcd")
         self.points = np.tile(pcd, (max_index + 1, 1, 1))
         self.impulses = np.empty((0, 6), float)
 
