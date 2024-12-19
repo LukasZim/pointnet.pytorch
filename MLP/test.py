@@ -24,7 +24,7 @@ def calculate_UDF(model, point):
     output = model(t)
     return output.detach().cpu().numpy()
 
-def dense_PC(model, mesh, GT_distances, delta = 0.1, num_steps=1, n = 1000):
+def dense_PC(model, mesh, GT_distances, delta = 0.05, num_steps=4, n = 1000):
     # grab m points from the mesh
     np.random.seed(0)
     vertices = np.asarray(mesh.vertices)
@@ -38,9 +38,9 @@ def dense_PC(model, mesh, GT_distances, delta = 0.1, num_steps=1, n = 1000):
         for index, point in enumerate(P_init):
             # p = p - f(p) * gradient(f(p)) / || gradient(f(p)) ||
             gradient = calculate_gradient(model, point)
-            new_point = point - calculate_UDF(model, point) * gradient / np.linalg.norm(gradient) * 0.5
-
-            P_init[index] = vertices[np.argmin(np.linalg.norm(new_point - vertices, axis=1))]
+            new_point = point - calculate_UDF(model, point) * gradient / np.linalg.norm(gradient)
+            P_init[index] = new_point
+            # P_init[index] = vertices[np.argmin(np.linalg.norm(new_point - vertices, axis=1))]
 
 
             # Pdense: n points drawn from p with replacement
@@ -48,20 +48,23 @@ def dense_PC(model, mesh, GT_distances, delta = 0.1, num_steps=1, n = 1000):
     P_dense = P_init[np.random.randint(P_init.shape[0], size=n), :]
 
     # Pdense = { p + d | p in Pdense and d stddev(0, delta/3)}
-    # normal_dist = np.random.normal(0, delta / 30, size=P_dense.shape)
-    # P_dense = P_dense + normal_dist
+    normal_dist = np.random.normal(0, delta / 30, size=P_dense.shape)
+    P_dense = P_dense + normal_dist
 
     # for i ... num_steps:
-    # for i in range(num_steps):
-    #     for index, point in enumerate(P_dense):
+    for i in range(num_steps):
+        for index, point in enumerate(P_dense):
     #         # p = p - f(p) * gradient(f(p)) / || gradient(f(p)) ||
-    #         gradient = calculate_gradient(model, point)
-    #         P_init[index] = point - calculate_UDF(model, point) * gradient / np.linalg.norm(gradient) * 0.5
+            gradient = calculate_gradient(model, point)
+            P_dense[index] = point - calculate_UDF(model, point) * gradient / np.linalg.norm(gradient) * 0.5
         # p = p - f(p) * gradient(f(p)) / || gradient(f(p)) ||
 
-    # mask = (calculate_UDF(model, P_dense) < delta).ravel()
-    # P_dense = P_dense[mask]
+    mask = (calculate_UDF(model, P_dense) < delta).ravel()
+    P_dense = P_dense[mask]
 
+    # P_dense[index] = vertices[np.argmin(np.linalg.norm(new_point - vertices, axis=1))]
+    for index, point in enumerate(P_dense):
+        P_dense[index] = vertices[np.argmin(np.linalg.norm(point - vertices, axis=1))]
     return P_dense
 
 
@@ -114,7 +117,7 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh_path, model
 
 def visualize():
     mlp = MLP(3)
-    state = torch.load("checkpoints/5.pth")
+    state = torch.load("checkpoints/95.pth")
     mlp.load_state_dict(state['state_dict'])
 
     X = state['X']

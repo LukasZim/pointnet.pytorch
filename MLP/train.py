@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from MLP.data_loader.data_loader import FractureData, FractureDataLoader
 from MLP.model import model
-from MLP.model.loss import l1_loss
+from MLP.model.loss import *
 from MLP.model.model import MLP
 from MLP.test import visualize
 from MLP.visualize import load_mesh_from_file
@@ -37,10 +37,10 @@ mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/bunny.obj"
 
 dataloader, X, y, X_train, y_train, X_test, y_test = FractureDataLoader(path)
 mlp = MLP(3)
-loss_function = l1_loss()
+loss_function = custom_loss
 optimizer = torch.optim.Adam(mlp.parameters(), lr=0.0001)
 
-for epoch in (range(0, 100)):
+for epoch in (range(0, 1000)):
     print(f'Starting Epoch {epoch + 1}')
 
     current_loss = 0.0
