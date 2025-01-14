@@ -3,9 +3,11 @@ import time
 import torch
 from sklearn.metrics import mean_squared_error, r2_score
 
+from MLP import region_growing
 from MLP.model.model import MLP
 import numpy as np
 
+from MLP.region_growing import RegionGrowing
 from MLP.visualize import load_mesh_from_file
 
 
@@ -78,13 +80,14 @@ def print_array_properties(arr):
     print("std", np.std(arr))
     print("median", np.median(arr))
 
-def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh_path, model, use_sqrt_ratios=False):
+
+def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, part_labels, use_sqrt_ratios=False):
     import polyscope as ps
 
     ps.set_window_size(1920, 1080)
     ps.init()
 
-    mesh = load_mesh_from_file(mesh_path)
+
     vertices = np.asarray(mesh.vertices)
     faces = np.asarray(mesh.triangles)
 
@@ -98,11 +101,13 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh_path, model
 
     print_array_properties(gradients)
 
+    ps.get_surface_mesh("UDF mesh").add_scalar_quantity("label scalar", part_labels, defined_on="vertices", enabled=True)
+
     ps.get_surface_mesh("UDF mesh").add_vector_quantity("gradients vector", gradients, defined_on="vertices",
-                                                        enabled=True)
+                                                        enabled=False)
 
     ps.get_surface_mesh("UDF mesh").add_scalar_quantity("distance scalar", distances, defined_on="vertices",
-                                                        enabled=True)
+                                                        enabled=False)
 
     ps.get_surface_mesh("UDF mesh").add_scalar_quantity("difference", (distances - GT_distances), defined_on="vertices")
 
@@ -114,6 +119,28 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh_path, model
 
     ps.screenshot("screenshots/screenshot_" + time.strftime("%Y%m%d-%H%M%S") + ".png", transparent_bg=True)
     ps.show()
+
+
+# def segment_UDF(mesh, predicted_udf, gt_udf, threshold=0.2):
+#     import networkx as nx
+#     import community as community_louvain
+#
+#     vertices = np.asarray(mesh.vertices)
+#     faces = np.asarray(mesh.triangles)
+#
+#     mask = predicted_udf >= threshold
+#     threshold_vertices = vertices[mask]
+#
+#     # create clusters based on the threshold
+#     G = nx.Graph()
+#     G.add_edges_from(faces)
+#     subgraph = G.subgraph(threshold_vertices)
+#     partition = community_louvain.best_partition(subgraph)
+#
+#
+#     # iteratively grow groups by slowly lowering threshold
+#     other_vertices = vertices[not mask]
+
 
 def visualize():
     mlp = MLP(3)
@@ -149,11 +176,14 @@ def visualize():
     print("Mean Squared Error:", mse)
     print("R2 Score:", r2)
 
+    mesh = load_mesh_from_file(mesh_path)
 
+    # labels = segment_UDF(mesh, predicted_labels, test_targets)
 
+    region_growing = RegionGrowing(mesh, predicted_labels, test_targets)
+    labels = region_growing.calculate_region_growing()
 
-
-    visualize_UDF_polyscope(gradients, predicted_labels, test_targets, mesh_path, mlp)
+    visualize_UDF_polyscope(gradients, predicted_labels, test_targets, mesh, mlp, labels)
 
 if __name__ == '__main__':
     visualize()

@@ -40,7 +40,7 @@ mlp = MLP(3)
 loss_function = custom_loss
 optimizer = torch.optim.Adam(mlp.parameters(), lr=0.0001)
 
-for epoch in (range(0, 1000)):
+for epoch in (range(0, 100)):
     print(f'Starting Epoch {epoch + 1}')
 
     current_loss = 0.0
