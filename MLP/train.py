@@ -9,7 +9,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error, r2_score
 from tqdm import tqdm
 
-from MLP.data_loader.data_loader import FractureData, FractureDataLoader
+from MLP.data_loader.data_loader import FractureDataset, FractureDataLoader
 from MLP.model import model
 from MLP.model.loss import *
 from MLP.model.model import MLP
@@ -32,7 +32,7 @@ def save_checkpoint(epoch, model, optimizer, path, X, y, X_test, y_test, X_train
     }
     torch.save(state, f'{path}/{epoch}.pth')
 
-path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/79.csv"
+path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/79.pkl"
 mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/bunny.obj"
 
 dataloader, X, y, X_train, y_train, X_test, y_test = FractureDataLoader(path)
