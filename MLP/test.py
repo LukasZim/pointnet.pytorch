@@ -2,6 +2,7 @@ import time
 
 import torch
 from sklearn.metrics import mean_squared_error, r2_score
+from torch.utils.tensorboard import SummaryWriter
 
 from MLP import region_growing
 from MLP.model.model import MLP
@@ -10,6 +11,7 @@ import numpy as np
 from MLP.region_growing import RegionGrowing
 from MLP.visualize import load_mesh_from_file
 
+tensorboard_writer = SummaryWriter(log_dir="runs/MLP")
 
 def calculate_gradient(model, point):
     t = torch.from_numpy(point).float()
@@ -81,7 +83,7 @@ def print_array_properties(arr):
     print("median", np.median(arr))
 
 
-def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, part_labels, use_sqrt_ratios=False):
+def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, part_labels, impulse, use_sqrt_ratios=False):
     import polyscope as ps
 
     ps.set_window_size(1920, 1080)
@@ -111,13 +113,19 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
 
     ps.get_surface_mesh("UDF mesh").add_scalar_quantity("difference", (distances - GT_distances), defined_on="vertices")
 
-    points = dense_PC(model, mesh, GT_distances)
+    # points = dense_PC(model, mesh, GT_distances)
+    points = impulse[:3].reshape(-1, 3)
+    ps.register_point_cloud("Impact point", points, enabled=True)
 
-    ps.register_point_cloud("Dense fracture PC", points, enabled=True)
+    # ps.register_point_cloud("Dense fracture PC", points, enabled=True)
 
     ps.look_at((0., 0., 2.5), (0, 0, 0))
 
     ps.screenshot("screenshots/screenshot_" + time.strftime("%Y%m%d-%H%M%S") + ".png", transparent_bg=True)
+    ss = ps.screenshot_to_buffer(transparent_bg=False)
+    ss3 = ss[:,:,:3]
+    tensorboard_writer.add_image("labelling", ss3, dataformats="HWC")
+    tensorboard_writer.close()
     ps.show()
 
 
@@ -143,16 +151,28 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
 
 
 def visualize():
-    mlp = MLP(3)
-    state = torch.load("checkpoints/95.pth")
+    mlp = MLP(9)
+    state = torch.load("checkpoints/45.pth")
     mlp.load_state_dict(state['state_dict'])
+    index_to_use = 71
 
-    X = state['X']
-    y = state['y']
+    X, y, impulse = state['dataset'].get_GT(index_to_use)
+    # y = state['y']
     mesh_path = state['mesh_path']
+    mesh = load_mesh_from_file(mesh_path)
+
+    # random_vertex = np.asarray(mesh.vertices)[10]
+    # impulse[0] = random_vertex[0]
+    # impulse[1] = random_vertex[1]
+    # impulse[2] = random_vertex[2]
+
+
+
 
 
     test_data = torch.from_numpy(X).float()
+    impulse_input = torch.from_numpy(impulse).unsqueeze(0).expand(test_data.size(0), -1).float()
+    test_data = torch.cat((test_data, impulse_input), 1)
     test_data.requires_grad = True
     test_targets = torch.from_numpy(y).float()
 
@@ -176,14 +196,16 @@ def visualize():
     print("Mean Squared Error:", mse)
     print("R2 Score:", r2)
 
-    mesh = load_mesh_from_file(mesh_path)
+    tensorboard_writer.add_scalar("MSE", mse)
+    tensorboard_writer.add_scalar("R2", r2)
+
 
     # labels = segment_UDF(mesh, predicted_labels, test_targets)
 
     region_growing = RegionGrowing(mesh, predicted_labels, test_targets)
     labels = region_growing.calculate_region_growing()
 
-    visualize_UDF_polyscope(gradients, predicted_labels, test_targets, mesh, mlp, labels)
+    visualize_UDF_polyscope(gradients[:, :3], predicted_labels, test_targets, mesh, mlp, labels, impulse)
 
 if __name__ == '__main__':
     visualize()
