@@ -1,16 +1,20 @@
+import os
 import time
+from glob import glob
 
 import torch
 from sklearn.metrics import mean_squared_error, r2_score
 from torch.utils.tensorboard import SummaryWriter
 
-from MLP import region_growing
 from MLP.model.model import MLP
 import numpy as np
 
 from MLP.region_growing import RegionGrowing
 from MLP.visualize import load_mesh_from_file
 
+log_root = "runs"
+latest_run = max(glob(f"{log_root}/*"), key=os.path.getmtime)
+print(latest_run)
 tensorboard_writer = SummaryWriter(log_dir="runs/MLP")
 
 def calculate_gradient(model, point):
@@ -129,25 +133,6 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
     ps.show()
 
 
-# def segment_UDF(mesh, predicted_udf, gt_udf, threshold=0.2):
-#     import networkx as nx
-#     import community as community_louvain
-#
-#     vertices = np.asarray(mesh.vertices)
-#     faces = np.asarray(mesh.triangles)
-#
-#     mask = predicted_udf >= threshold
-#     threshold_vertices = vertices[mask]
-#
-#     # create clusters based on the threshold
-#     G = nx.Graph()
-#     G.add_edges_from(faces)
-#     subgraph = G.subgraph(threshold_vertices)
-#     partition = community_louvain.best_partition(subgraph)
-#
-#
-#     # iteratively grow groups by slowly lowering threshold
-#     other_vertices = vertices[not mask]
 
 
 def visualize():
@@ -168,7 +153,7 @@ def visualize():
 
 
 
-
+    time_start = time.time()
 
     test_data = torch.from_numpy(X).float()
     impulse_input = torch.from_numpy(impulse).unsqueeze(0).expand(test_data.size(0), -1).float()
@@ -178,9 +163,11 @@ def visualize():
 
     mlp.eval()
 
+
+
     # with torch.no_grad():
     outputs = mlp(test_data)
-
+    print("duration_eval: ", time.time() - time_start)
     # loss = loss_function(outputs, test_targets.reshape((test_targets.shape[0], 1)))
 
     outputs.sum().backward()
@@ -204,6 +191,9 @@ def visualize():
 
     region_growing = RegionGrowing(mesh, predicted_labels, test_targets)
     labels = region_growing.calculate_region_growing()
+
+    duration = time.time() - time_start
+    print("duration:",duration)
 
     visualize_UDF_polyscope(gradients[:, :3], predicted_labels, test_targets, mesh, mlp, labels, impulse)
 

@@ -28,7 +28,7 @@ def save_checkpoint(epoch, model, optimizer, path, dataset, mesh_path):
     }
     torch.save(state, f'{path}/{epoch}.pth')
 
-tensorboard_writer = SummaryWriter(log_dir="runs/MLP")
+tensorboard_writer = SummaryWriter(log_dir=f"runs/MLP_{time.strftime('%Y%m%d-%H%M%S')}")
 
 path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/"
 mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/bunny.obj"
