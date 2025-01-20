@@ -1,6 +1,7 @@
 import os
 import time
 from glob import glob
+import random
 
 import torch
 from sklearn.metrics import mean_squared_error, r2_score
@@ -137,16 +138,16 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
 
 def visualize():
     mlp = MLP(9)
-    state = torch.load("checkpoints/45.pth")
+    state = torch.load("checkpoints/999.pth")
     mlp.load_state_dict(state['state_dict'])
-    index_to_use = 71
+    index_to_use = 74
 
     X, y, impulse = state['dataset'].get_GT(index_to_use)
     # y = state['y']
     mesh_path = state['mesh_path']
     mesh = load_mesh_from_file(mesh_path)
 
-    # random_vertex = np.asarray(mesh.vertices)[10]
+    random_vertex = np.asarray(mesh.vertices)[random.randint(0, len(mesh.vertices) - 1)]
     # impulse[0] = random_vertex[0]
     # impulse[1] = random_vertex[1]
     # impulse[2] = random_vertex[2]

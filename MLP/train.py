@@ -33,7 +33,8 @@ tensorboard_writer = SummaryWriter(log_dir=f"runs/MLP_{time.strftime('%Y%m%d-%H%
 path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/"
 mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/bunny.obj"
 
-dataloader, dataset = FractureDataLoader(path)
+train_dataloader, train_dataset = FractureDataLoader(path, type="train")
+test_dataloader, test_dataset = FractureDataLoader(path, type="test")
 mlp = MLP(9)
 loss_function = custom_loss
 optimizer = torch.optim.Adam(mlp.parameters(), lr=0.0001)
@@ -43,37 +44,54 @@ optimizer = torch.optim.Adam(mlp.parameters(), lr=0.0001)
 for epoch in (range(0, 1000)):
     print(f'Starting Epoch {epoch + 1}')
 
-    current_loss = 0.0
+    training_loss = 0.0
+    mlp.train()
+    for i, data in enumerate(train_dataloader):
+        [inputs, targets, impulses] = data
+        for index, (coordinates, udf_value, impulse) in enumerate(zip(inputs, targets, impulses)):
+            coordinates, udf_value = coordinates.float(), udf_value.float()
+            udf_value = udf_value.reshape((udf_value.shape[0], 1))
 
-    for i, data in enumerate(dataloader):
-        inputs, targets, impulse = data
-        # for coordinates, udf_value in zip(inputs, targets):
-            # coordinates = inputs[chunk_index]
-            # udf_value = targets[chunk_index]
-        coordinates = inputs
-        udf_value = targets
-        coordinates, udf_value = coordinates.float(), udf_value.float()
-        udf_value = udf_value.reshape((udf_value.shape[0], 1))
+            optimizer.zero_grad()
+            tens = torch.cat((coordinates, impulse.unsqueeze(0).repeat(coordinates.size(0), 1)), dim=1)
 
-        optimizer.zero_grad()
-        tens = torch.cat((coordinates, impulse), dim=1)
-        outputs = mlp(tens)
+            outputs = mlp(tens)
+            loss = loss_function(outputs, udf_value)
+            loss.backward()
+            optimizer.step()
 
-        loss = loss_function(outputs, udf_value)
+            training_loss += loss.item()
 
-        loss.backward()
+            if i == 0 and index == 0:
+                print(f"loss after mini-batch %5d: %.3f" % (i + 1, training_loss / 50))
 
-        optimizer.step()
 
-        current_loss += loss.item()
+    mlp.eval()
+    testing_loss = 0.0
+    for i, data in enumerate(test_dataloader):
+        [inputs, targets, impulses] = data
+        for index, (coordinates, udf_value, impulse) in enumerate(zip(inputs, targets, impulses)):
 
-        if i == 0:
-            print(f"loss after mini-batch %5d: %.3f" % (i + 1, current_loss / 50))
-            current_loss = 0.0
-    tensorboard_writer.add_scalar('loss/train', current_loss, epoch)
+
+            coordinates, udf_value = coordinates.float(), udf_value.float()
+            udf_value = udf_value.reshape((udf_value.shape[0], 1))
+
+            optimizer.zero_grad()
+            tens = torch.cat((coordinates, impulse.unsqueeze(0).repeat(coordinates.size(0), 1)), dim=1)
+
+            outputs = mlp(tens)
+            loss = loss_function(outputs, udf_value)
+            # loss.backward()
+            # optimizer.step()
+
+            testing_loss += loss.item()
+    #
+    # tensorboard_writer.add_scalar('Loss/Train', training_loss / len(train_dataset), epoch)
+    # tensorboard_writer.add_scalar('Loss/Test', testing_loss / len(test_dataset), epoch)
+    tensorboard_writer.add_scalars("Loss", {"Train": training_loss / len(train_dataset), "Test": testing_loss / len(test_dataset)}, epoch)
     print(f'Finished Epoch {epoch + 1}')
     # if epoch % 5 == 0:
-    save_checkpoint(epoch, mlp, optimizer, "checkpoints", dataset, mesh_path)
+    save_checkpoint(epoch, mlp, optimizer, "checkpoints", train_dataset, mesh_path)
 
 print("Training Finished")
 
