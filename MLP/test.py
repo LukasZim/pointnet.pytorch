@@ -5,8 +5,10 @@ import random
 
 import torch
 from sklearn.metrics import mean_squared_error, r2_score
+from sympy import minimum
 from torch.utils.tensorboard import SummaryWriter
 
+from MLP.metrics import chamfer_distance, minimum_chamfer_distance
 from MLP.model.model import MLP
 import numpy as np
 
@@ -88,7 +90,7 @@ def print_array_properties(arr):
     print("median", np.median(arr))
 
 
-def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, part_labels, impulse, use_sqrt_ratios=False):
+def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, part_labels, impulse, label_gt, use_sqrt_ratios=False):
     import polyscope as ps
 
     ps.set_window_size(1920, 1080)
@@ -109,6 +111,8 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
     print_array_properties(gradients)
 
     ps.get_surface_mesh("UDF mesh").add_scalar_quantity("label scalar", part_labels, defined_on="vertices", enabled=True)
+
+    ps.get_surface_mesh("UDF mesh").add_scalar_quantity("label GT", label_gt, defined_on="vertices", enabled=False)
 
     ps.get_surface_mesh("UDF mesh").add_vector_quantity("gradients vector", gradients, defined_on="vertices",
                                                         enabled=False)
@@ -138,11 +142,11 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
 
 def visualize():
     mlp = MLP(9)
-    state = torch.load("checkpoints/999.pth")
+    state = torch.load("checkpoints/300.pth")
     mlp.load_state_dict(state['state_dict'])
     index_to_use = 74
 
-    X, y, impulse = state['dataset'].get_GT(index_to_use)
+    X, y, impulse, label_gt, label_edge = state['dataset'].get_GT(index_to_use)
     # y = state['y']
     mesh_path = state['mesh_path']
     mesh = load_mesh_from_file(mesh_path)
@@ -174,29 +178,41 @@ def visualize():
     outputs.sum().backward()
     gradients = test_data.grad
     print("gradient:", test_data.grad)
-    predicted_labels = outputs.squeeze().tolist()
+    predicted_udf = outputs.squeeze().tolist()
 
-    predicted_labels = np.array(predicted_labels)
+    predicted_udf = np.array(predicted_udf)
     test_targets = np.array(test_targets)
 
-    mse = mean_squared_error(test_targets, predicted_labels)
-    r2 = r2_score(test_targets, predicted_labels)
+    mse = mean_squared_error(test_targets, predicted_udf)
+    r2 = r2_score(test_targets, predicted_udf)
     print("Mean Squared Error:", mse)
     print("R2 Score:", r2)
+
 
     tensorboard_writer.add_scalar("MSE", mse)
     tensorboard_writer.add_scalar("R2", r2)
 
 
-    # labels = segment_UDF(mesh, predicted_labels, test_targets)
+    # labels = segment_UDF(mesh, predicted_udf, test_targets)
 
-    region_growing = RegionGrowing(mesh, predicted_labels, test_targets)
+    region_growing = RegionGrowing(mesh, predicted_udf, test_targets)
     labels = region_growing.calculate_region_growing()
 
+
+    chamfer, key_map = minimum_chamfer_distance(np.asarray(mesh.vertices), labels, label_gt)
+    print('chamfer distance =', chamfer)
+    print("champfer key mapping", key_map)
     duration = time.time() - time_start
     print("duration:",duration)
+    labels = np.array([remap_label(label, key_map) for label in labels])
 
-    visualize_UDF_polyscope(gradients[:, :3], predicted_labels, test_targets, mesh, mlp, labels, impulse)
+    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, test_targets, mesh, mlp, labels, impulse, label_gt)
+
+def remap_label(label, key_map):
+    for (new_label, old_label) in key_map:
+        if old_label == label:
+            return new_label
+    return -1
 
 if __name__ == '__main__':
     visualize()

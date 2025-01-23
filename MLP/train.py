@@ -41,13 +41,13 @@ optimizer = torch.optim.Adam(mlp.parameters(), lr=0.0001)
 
 
 
-for epoch in (range(0, 1000)):
+for epoch in (range(0, 400)):
     print(f'Starting Epoch {epoch + 1}')
 
     training_loss = 0.0
     mlp.train()
     for i, data in enumerate(train_dataloader):
-        [inputs, targets, impulses] = data
+        [inputs, targets, impulses, label_gt, label_edge] = data
         for index, (coordinates, udf_value, impulse) in enumerate(zip(inputs, targets, impulses)):
             coordinates, udf_value = coordinates.float(), udf_value.float()
             udf_value = udf_value.reshape((udf_value.shape[0], 1))

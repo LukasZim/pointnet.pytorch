@@ -75,7 +75,6 @@ class FractureDataset(Dataset):
         df = pd.read_pickle(self.impulse[file_index])
         impulse = df.values[0]
 
-        asdf = pcd[start_index]
         pcd = pcd[start_index: start_index + self.chunk_size]
         udf = udf[start_index: start_index + self.chunk_size]
         label_gt = label_gt[start_index: start_index + self.chunk_size]
@@ -85,19 +84,21 @@ class FractureDataset(Dataset):
         udf = torch.tensor(udf, dtype=torch.float32)
         impulse = torch.tensor(impulse, dtype=torch.float32)
 
-        return pcd, udf, impulse
+        return pcd, udf, impulse, label_gt, label_edge
 
     def get_GT(self, idx):
 
         df = pd.read_pickle(self.udf[idx])
-        pcd = df.drop("distance", axis=1).values
+        pcd = df.drop(["distance", "label", "edge_labels"], axis=1).values
         udf = df["distance"].values
+        label_gt = df["label"].values
+        label_edge = df['edge_labels'].values
 
 
         df = pd.read_pickle(self.impulse[idx])
         impulse = df.values[0]
 
-        return pcd, udf, impulse
+        return pcd, udf, impulse, label_gt, label_edge
 
     def _prepare_data_indices(self):
         indices = []
