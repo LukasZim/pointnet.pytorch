@@ -26,16 +26,15 @@ class RegionGrowing:
         # threshold the udf
         self.threshold()
 
-        # calculate the groups
+        # create a graph with all edges of the mesh
         G = nx.Graph()
         all_edges = [(x,y) for [a,b,c] in self.faces for x,y in [(a,b), (a,c), (b,c)]]
         G.add_edges_from(all_edges)
-        print(G)
-        print(G[1])
+
+        # take udf property from vertices and add them to graph nodes
         node_value_dict = dict(zip(G.nodes, self.udf))
         nx.set_node_attributes(G, node_value_dict, 'udf')
-        print(G)
-        print(G[1])
+
 
         visited = set()
         num_groups = 0
@@ -58,7 +57,7 @@ class RegionGrowing:
                     visited.add(node)
 
             self.threshold_value -= .004
-        print(num_groups)
+        # print(num_groups)
 
         for node, udf in set([(n, attrs.get('udf')) for n, attrs in G.nodes(data=True)]):
             neighbour_labels = [(i,self.labeling[i]) for i in list(G.neighbors(node))]
@@ -72,16 +71,16 @@ class RegionGrowing:
                         self.labeling = [new_label if label == neighbour_label or label == own_label else label for label in self.labeling ]
                         # break
 
-                        print(own_label, neighbour_label, new_label)
-                        print(np.unique(self.labeling, return_counts=True))
-                        print("========================")
+                        # print(own_label, neighbour_label, new_label)
+                        # print(np.unique(self.labeling, return_counts=True))
+                        # print("========================")
                         break
 
 
 
-        print(num_groups)
-        print(np.max(self.labeling))
-        print(np.unique(self.labeling, return_counts=True))
+        # print(num_groups)
+        # print(np.max(self.labeling))
+        # print(np.unique(self.labeling, return_counts=True))
         return np.array(self.labeling)
 
 

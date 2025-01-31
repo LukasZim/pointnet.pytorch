@@ -1,9 +1,51 @@
+import time
+
 import numpy as np
+import torch
 from scipy.spatial import KDTree
+
+from MLP.helper_functions import append_impulse_to_data
+from MLP.region_growing import RegionGrowing
+
+
+def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_values=10):
+    start_time = time.time()
+    chamfer_values = []
+
+    for _ in range(num_values):
+        pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_random_GT()
+        labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
+
+        chamfer, _ = minimum_chamfer_distance(np.asarray(mesh.vertices), labels, gt_labels)
+
+        chamfer_values.append(chamfer)
+    print("Chamfer values calculation Duration:", time.time() - start_time)
+    return np.mean(chamfer_values)
+
+
+def get_model_output(mesh, pcd, impulse, model, gt_udf):
+    from MLP.train import run_model
+    pcd = torch.from_numpy(pcd).float().unsqueeze(0)
+    impulse = torch.from_numpy(impulse).float().unsqueeze(0)
+    gt_udf = torch.from_numpy(gt_udf).float()
+    outputs, _ = run_model(pcd, gt_udf, impulse, model, train=False)
+
+    predicted_udf = np.array(outputs.squeeze().tolist())
+
+    region_growing = RegionGrowing(mesh, predicted_udf, gt_udf)
+    labels = region_growing.calculate_region_growing()
+    return labels, predicted_udf
+
+def get_model_output_from_index(index, dataset, mesh, model):
+    pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(index)
+    labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
+
+    return  labels, predicted_udf, gt_labels, gt_udf
+
+
 
 
 def minimum_chamfer_distance(vertices, predicted_labels, GT_labels):
-    pass
     # create a list of all groups of vertices for predicted labels
     predicted_combined = list(zip(predicted_labels, vertices))
     predicted_vertex_groups = {}

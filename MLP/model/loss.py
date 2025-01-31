@@ -17,5 +17,6 @@ def custom_loss(output, target):
     ratio = (output + epsilon) / (target + epsilon)
     ratio_inv = ratio ** -1
     ratio = torch.max(ratio, ratio_inv)
-    loss = torch.sum(torch.abs(output - target))
+    alpha = 10
+    loss = torch.sum(torch.abs(output - target) / (1 + alpha * target))
     return loss

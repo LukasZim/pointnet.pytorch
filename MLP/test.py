@@ -8,10 +8,13 @@ from sklearn.metrics import mean_squared_error, r2_score
 from sympy import minimum
 from torch.utils.tensorboard import SummaryWriter
 
+from MLP.data_loader.data_loader import FractureDataLoader
+from MLP.helper_functions import append_impulse_to_data
 from MLP.metrics import chamfer_distance, minimum_chamfer_distance
-from MLP.model.model import MLP
+from MLP.model.MLP import MLP,CNN
 import numpy as np
 
+from MLP.path import Path
 from MLP.region_growing import RegionGrowing
 from MLP.visualize import load_mesh_from_file
 
@@ -141,17 +144,18 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
 
 
 def visualize():
-    mlp = MLP(9)
+    model = CNN(9)
     state = torch.load("checkpoints/300.pth")
-    mlp.load_state_dict(state['state_dict'])
-    index_to_use = 74
+    model.load_state_dict(state['state_dict'])
+    index_to_use = 1
 
-    X, y, impulse, label_gt, label_edge = state['dataset'].get_GT(index_to_use)
+    validate_dataloader, validate_dataset = FractureDataLoader(Path().path, type="validate")
+    X, y, impulse, label_gt, label_edge = validate_dataset.get_GT(index_to_use)
     # y = state['y']
     mesh_path = state['mesh_path']
     mesh = load_mesh_from_file(mesh_path)
 
-    random_vertex = np.asarray(mesh.vertices)[random.randint(0, len(mesh.vertices) - 1)]
+    # random_vertex = np.asarray(mesh.vertices)[random.randint(0, len(mesh.vertices) - 1)]
     # impulse[0] = random_vertex[0]
     # impulse[1] = random_vertex[1]
     # impulse[2] = random_vertex[2]
@@ -160,23 +164,20 @@ def visualize():
 
     time_start = time.time()
 
-    test_data = torch.from_numpy(X).float()
-    impulse_input = torch.from_numpy(impulse).unsqueeze(0).expand(test_data.size(0), -1).float()
-    test_data = torch.cat((test_data, impulse_input), 1)
-    test_data.requires_grad = True
-    test_targets = torch.from_numpy(y).float()
+    from MLP.train import run_model
+    X = torch.tensor(X)
+    y = torch.tensor(y)
+    impulse = torch.tensor(impulse)
 
-    mlp.eval()
+    outputs, test_data = run_model(X.unsqueeze(0), y.unsqueeze(0), impulse.unsqueeze(0), model, requires_grad=True)
+    test_targets = y.float()
 
-
-
-    # with torch.no_grad():
-    outputs = mlp(test_data)
     print("duration_eval: ", time.time() - time_start)
     # loss = loss_function(outputs, test_targets.reshape((test_targets.shape[0], 1)))
 
     outputs.sum().backward()
     gradients = test_data.grad
+    gradients = gradients.squeeze().permute(1,0)
     print("gradient:", test_data.grad)
     predicted_udf = outputs.squeeze().tolist()
 
@@ -194,19 +195,21 @@ def visualize():
 
 
     # labels = segment_UDF(mesh, predicted_udf, test_targets)
-
+    region_growing_time = time.time()
     region_growing = RegionGrowing(mesh, predicted_udf, test_targets)
     labels = region_growing.calculate_region_growing()
+    print("region growing duration: ", time.time() - region_growing_time)
 
-
+    chamfer_time = time.time()
     chamfer, key_map = minimum_chamfer_distance(np.asarray(mesh.vertices), labels, label_gt)
+    print("chamfer duration: ", time.time() - chamfer_time)
     print('chamfer distance =', chamfer)
     print("champfer key mapping", key_map)
     duration = time.time() - time_start
     print("duration:",duration)
     labels = np.array([remap_label(label, key_map) for label in labels])
 
-    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, test_targets, mesh, mlp, labels, impulse, label_gt)
+    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, test_targets, mesh, model, labels, impulse, label_gt)
 
 def remap_label(label, key_map):
     for (new_label, old_label) in key_map:
