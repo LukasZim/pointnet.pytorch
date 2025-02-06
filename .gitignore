@@ -10,3 +10,6 @@ seg/
 *.egg-info/
 *.png
 *.jpg
+/MLP/datasets/
+/MLP/checkpoints/
+/MLP/checkpoints_14hours/

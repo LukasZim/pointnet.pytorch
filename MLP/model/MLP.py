@@ -48,5 +48,6 @@ class CNN(nn.Module):
         x = torch.relu(self.conv2(x))
         x = torch.relu(self.conv3(x))
         x = torch.relu(self.conv4(x))
+        # x = torch.relu(self.linear(x))
         return x
         # return self.layers(x)

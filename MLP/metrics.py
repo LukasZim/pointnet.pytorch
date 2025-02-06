@@ -8,18 +8,21 @@ from MLP.helper_functions import append_impulse_to_data
 from MLP.region_growing import RegionGrowing
 
 
-def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_values=10):
+def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_values=10, edge=False):
     start_time = time.time()
     chamfer_values = []
 
     for _ in range(num_values):
         pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_random_GT()
         labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
-
-        chamfer, _ = minimum_chamfer_distance(np.asarray(mesh.vertices), labels, gt_labels)
+        if edge:
+            chamfer = contour_chamfer_distance(np.asarray(mesh.vertices), np.asarray(mesh.triangles), labels, gt_labels)
+        else:
+            chamfer, _ = minimum_chamfer_distance(np.asarray(mesh.vertices), labels, gt_labels)
 
         chamfer_values.append(chamfer)
     print("Chamfer values calculation Duration:", time.time() - start_time)
+
     return np.mean(chamfer_values)
 
 
@@ -93,6 +96,9 @@ def chamfer_distance(A, B):
     :param B: a list of points.
     :return: chamfer distance between A and B.
     """
+    A = np.array(A)
+    B = np.array(B)
+
     tree = KDTree(B)
     dist_A = tree.query(A)[0]
 
@@ -100,4 +106,29 @@ def chamfer_distance(A, B):
     dist_B = tree.query(B)[0]
 
     return np.mean(dist_A) + np.mean(dist_B)
+
+def contour_chamfer_distance(vertices, triangles, predicted_labels, gt_labels):
+    # intialize a set of indices of edge points for predicted and gt
+    predicted_set = set()
+    gt_set = set()
+    # loop over all edges
+    for [t1,t2,t3] in triangles:
+        edges = [(t1, t2), (t2, t3), (t3, t1)]
+        for (v1, v2) in edges:
+            # check if vertices on edge have the same label
+            if not predicted_labels[v1] == predicted_labels[v2]:
+                # if not add to either gt_set of predicted_set
+                predicted_set.update((v1, v2))
+            if not gt_labels[v1] == gt_labels[v2]:
+                gt_set.update((v1, v2))
+    predicted_edge_points = [vertices[x] for x in predicted_set]
+    gt_edge_points = [vertices[x] for x in gt_set]
+    # return chamfer distance between point_sets gt_set and predicted_set
+    if len(predicted_edge_points) == 0 and not len(gt_edge_points) == 0:
+        return float('inf')
+    if len(gt_edge_points) == 0 and not len(predicted_edge_points) == 0:
+        return float('inf')
+    if len (predicted_edge_points) == 0 and len(gt_edge_points) == 0:
+        return 0
+    return chamfer_distance(predicted_edge_points, gt_edge_points)
 

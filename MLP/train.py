@@ -12,7 +12,8 @@ from tqdm import tqdm
 
 from MLP.data_loader.data_loader import FractureDataset, FractureDataLoader
 from MLP.helper_functions import append_impulse_to_data, get_screenshot_polyscope
-from MLP.metrics import minimum_chamfer_distance, calculate_n_minimum_chamfer_values, get_model_output_from_index
+from MLP.metrics import minimum_chamfer_distance, calculate_n_minimum_chamfer_values, get_model_output_from_index, \
+    contour_chamfer_distance
 from MLP.model import MLP
 from MLP.model.loss import *
 from MLP.model.MLP import MLP, CNN
@@ -66,8 +67,10 @@ def run_epoch(model, dataloader, train=True):
         model.train()
     else:
         model.eval()
+    size = 0
     for i, data in enumerate(dataloader):
         [points, udf_values, impulses, gt_labels, label_edge] = data
+        size += 1
 
         model_output, _ = run_model(points, udf_values, impulses, model, train=train)
         loss = loss_function(model_output, udf_values)
@@ -79,8 +82,9 @@ def run_epoch(model, dataloader, train=True):
 
         if i == 0:
             print(f"loss after mini-batch %5d: %.3f" % (i + 1, loss / 50))
+        # print(i)
 
-    return loss
+    return loss / size
 
 if __name__ == '__main__':
     tensorboard_writer = SummaryWriter(log_dir=f"runs/MLP_{time.strftime('%Y%m%d-%H%M%S')}")
@@ -101,7 +105,8 @@ if __name__ == '__main__':
         testing_loss = run_epoch(model, test_dataloader, train=False)
 
         mesh = load_mesh_from_file(mesh_path)
-        chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
+        # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
+        edge_chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, edge=True)
 
         tensorboard_writer.add_scalars("Loss", {"Train": training_loss /len(mesh.vertices) , "Test": testing_loss / len(mesh.vertices)}, epoch)
         time_start = time.time()
@@ -118,7 +123,9 @@ if __name__ == '__main__':
             tensorboard_writer.add_image(f"gt_udf/{epoch}", ss_gt_udf, dataformats="HWC")
             tensorboard_writer.add_image(f"predicted_udf/{epoch}", ss_predicted_udf, dataformats="HWC")
             print("screenshots take this long", time.time() - time_start)
-        tensorboard_writer.add_scalar('chamfer', chamfer_value, epoch)
+        # tensorboard_writer.add_scalar('chamfer', chamfer_value, epoch)
+        tensorboard_writer.add_scalar('edge_chamfer', edge_chamfer_value, epoch)
+
 
         print(f'Finished Epoch {epoch + 1}')
         save_checkpoint(epoch, model, optimizer, "checkpoints", train_dataset, mesh_path)

@@ -1,7 +1,9 @@
 import random
-
+import os
 import pandas as pd
+from deltaconv.experiments.datasets.shape_seg import read_obj
 from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
 
 
 class FractureDataset(Dataset):
@@ -136,100 +138,110 @@ def FractureDataLoader(path, type):
     return dataloader, dataset
 
 
-import os
+
+
+
 import os.path as osp
+from os import listdir as osls
 import shutil
-import json
+import numpy as np
+import progressbar
 
+import openmesh
 import torch
-
-from torch_geometric.data import (Data, InMemoryDataset, download_url,
-                                  extract_zip)
-from torch_geometric.io import read_txt_array
+from torch_geometric.data import InMemoryDataset, download_url, extract_zip, Data
+from torch_geometric.io import read_ply
 
 
-class ShapeNet(InMemoryDataset):
+class FractureGeomDataset(InMemoryDataset):
 
-    def __init__(self, root, include_normals=True,
-                 split='trainval', transform=None, pre_transform=None,
-                 pre_filter=None):
+    # set url
+    # set folders for MIT dataset
 
-        super(ShapeNet, self).__init__(root, transform, pre_transform,
-                                       pre_filter)
+    # root should be MLP/datasets
+    def __init__(self, root, train=True, transform=None, pre_transform=None,
+                 pre_filter=None, dataset_name="bunny"):
+        self.used_dataset_name = dataset_name
+        self.udf = {}
+        self.impulse = {}
+        self.files_used = 0
+        for file in os.listdir(os.path.join(root, self.used_dataset_name)):
+            if not file.split(".")[-1] == "pkl":
+                continue
+            without_filetype = file.split('.')[0]
+            if len(without_filetype.split('_')) == 1:
+                index = int(without_filetype)
+                self.udf[index] = os.path.join(root, self.used_dataset_name, file)
+                self.files_used += 1
+            else:
+                index = int(without_filetype.split('_')[0])
+                self.impulse[index] = os.path.join(root, self.used_dataset_name, file)
 
-        if split == 'train':
-            path = self.processed_paths[0]
-        elif split == 'val':
-            path = self.processed_paths[1]
-        elif split == 'test':
-            path = self.processed_paths[2]
-        elif split == 'trainval':
-            path = self.processed_paths[3]
-        else:
-            raise ValueError((f'Split {split} found, but expected either '
-                              'train, val, trainval or test'))
-
+        super(FractureGeomDataset, self).__init__(root, transform, pre_transform)
+        # set processed path
+        path = self.processed_paths[0] if train else self.processed_paths[1]
+        # load data from path
         self.data, self.slices = torch.load(path)
-        self.data.x = self.data.x if include_normals else None
-
-        self.y_mask = torch.zeros((len(self.seg_classes.keys()), 50),
-                                  dtype=torch.bool)
-        for i, labels in enumerate(self.seg_classes.values()):
-            self.y_mask[i, labels] = 1
 
     @property
-    def num_classes(self):
-        return self.y_mask.size(-1)
+    def raw_file_names(self):
+        return []
+
+        # returns name to zip file containing dataset
+
+    @property
+    def processed_file_names(self):
+        return ['training.pt', 'test.pt', 'validate.pt']
+        # return list of file names containing training and test data
 
 
+    def process(self):
+        print("started processing dataset")
 
-    def process_filenames(self, filenames):
+        # create list containing all data named data_list
         data_list = []
-        categories_ids = [self.category_ids[cat] for cat in self.categories]
-        cat_idx = {categories_ids[i]: i for i in range(len(categories_ids))}
-        if self.n_per_class is not None:
-            per_class_count = [self.n_per_class for i in range(len(cat_idx))]
+        data_list_test = []
+        data_list_validate = []
 
-        for i, name in enumerate(filenames):
-            cat = name.split(osp.sep)[0]
-            if cat not in categories_ids:
-                continue
-            if self.n_per_class is not None:
-                if per_class_count[cat_idx[cat]] <= 0:
-                    continue
-                per_class_count[cat_idx[cat]] -= 1
+        # read faces from obj file
+        mesh = read_obj(os.path.join(self.root, self.used_dataset_name, self.used_dataset_name + ".obj"))
 
-            data = read_txt_array(osp.join(self.raw_dir, name))
-            pos = data[:, :3]
-            x = data[:, 3:6]
-            y = data[:, -1].type(torch.long)
-            cat_onehot = pos.new_zeros(1, 16)
-            cat_onehot[0, cat_idx[cat]] = 1
-            data = Data(pos=pos, norm=x, y=y, category=cat_onehot)
+        # loop over all files in dir
+        for file_index in tqdm(range(self.files_used)):
+            data = read_obj(os.path.join(self.root, self.used_dataset_name, self.used_dataset_name + ".obj"))
+            filename = self.udf[file_index]
+            df = pd.read_pickle(filename)
+            udf = df["distance"].values
+            label_gt = df["label"].values
+
+            df = pd.read_pickle(self.impulse[file_index])
+            impulse = df.values[0]
+
+            data.y = torch.tensor(udf, dtype=torch.float32)
+            data.gt_label = torch.tensor(label_gt, dtype=torch.int64)
+            data.impulse = torch.tensor(impulse, dtype=torch.float32)
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue
             if self.pre_transform is not None:
                 data = self.pre_transform(data)
-            data_list.append(data)
+            if file_index < self.files_used * 0.7:
+                data_list.append(data)
+            elif file_index < self.files_used * 0.85:
+                data_list_test.append(data)
+            else:
+                data_list_validate.append(data)
 
-        return data_list
+        torch.save(self.collate(data_list), self.processed_paths[0])
+        torch.save(self.collate(data_list_test), self.processed_paths[1])
+        torch.save(self.collate(data_list_validate), self.processed_paths[2])
 
-    def process(self):
-        trainval = []
-        for i, split in enumerate(['train', 'val', 'test']):
-            path = osp.join(self.raw_dir, 'train_test_split',
-                            f'shuffled_{split}_file_list.json')
-            with open(path, 'r') as f:
-                filenames = [
-                    osp.sep.join(name.split('/')[1:]) + '.txt'
-                    for name in json.load(f)
-                ]  # Removing first directory.
-            data_list = self.process_filenames(filenames)
-            if split == 'train' or split == 'val':
-                trainval += data_list
-            torch.save(self.collate(data_list), self.processed_paths[i])
-        torch.save(self.collate(trainval), self.processed_paths[3])
+        # save data_list to disk, after applying self.collate to the data_list
 
-    def __repr__(self):
-        return '{}({}, categories={})'.format(self.__class__.__name__,
-                                              len(self), self.categories)
+        # rmtree all unnecessary files
+
+
+
+
+
+
+
