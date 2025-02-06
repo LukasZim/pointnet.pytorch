@@ -141,16 +141,8 @@ def FractureDataLoader(path, type):
 
 
 
-import os.path as osp
-from os import listdir as osls
-import shutil
-import numpy as np
-import progressbar
-
-import openmesh
 import torch
 from torch_geometric.data import InMemoryDataset, download_url, extract_zip, Data
-from torch_geometric.io import read_ply
 
 
 class FractureGeomDataset(InMemoryDataset):
@@ -232,8 +224,8 @@ class FractureGeomDataset(InMemoryDataset):
                 data_list_validate.append(data)
 
         torch.save(self.collate(data_list), self.processed_paths[0])
-        torch.save(self.collate(data_list_test), self.processed_paths[1])
-        torch.save(self.collate(data_list_validate), self.processed_paths[2])
+        torch.save(self.collate(data_list), self.processed_paths[1]) #TODO: REVERT THIS ONE
+        # torch.save(self.collate(data_list_validate), self.processed_paths[2])
 
         # save data_list to disk, after applying self.collate to the data_list
 

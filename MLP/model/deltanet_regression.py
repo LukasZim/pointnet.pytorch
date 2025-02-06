@@ -9,7 +9,7 @@ from deltaconv.nn import MLP
 
 
 class DeltaNetRegression(torch.nn.Module):
-    def __init__(self, in_channels, conv_channels=[64, 128, 256], mlp_depth=2, embedding_size=1024, categorical_vector=False, num_neighbors=20, grad_regularizer=0.001, grad_kernel_width=1):
+    def __init__(self, in_channels, conv_channels=[64, 128, 256], mlp_depth=2, embedding_size=1024, num_neighbors=20, grad_regularizer=0.001, grad_kernel_width=1):
         """Segmentation of Point Clouds with DeltaConv.
         The architecture is based on the architecture used by DGCNN (https://dl.acm.org/doi/10.1145/3326362.
 
@@ -34,23 +34,16 @@ class DeltaNetRegression(torch.nn.Module):
         """
         super().__init__()
 
-        self.categorical_vector = categorical_vector
 
         self.deltanet_base = DeltaNetBase(in_channels, conv_channels, mlp_depth, num_neighbors, grad_regularizer, grad_kernel_width)
 
         # Global embedding
         self.lin_global = MLP([sum(conv_channels), embedding_size])
 
-        # For ShapeNet segmentation, most authors add an embedding of the category to aid with segmentation.
-        if categorical_vector:
-            self.lin_categorical = MLP([16, 64])
-            self.segmentation_head = Seq(
-                MLP([embedding_size + sum(conv_channels) + 64, 256]), Dropout(0.5), MLP([256, 256]), Dropout(0.5),
-                Linear(256, 128), LeakyReLU(negative_slope=0.2), Linear(128, 1))
-        else:
-            self.segmentation_head = Seq(
-                MLP([embedding_size + sum(conv_channels), 256]), Dropout(0.5), MLP([256, 256]), Dropout(0.5),
-                Linear(256, 128), LeakyReLU(negative_slope=0.2), Linear(128, 1))
+
+        self.segmentation_head = Seq(
+            MLP([embedding_size + sum(conv_channels), 256]), Dropout(0.5), MLP([256, 256]), Dropout(0.5),
+            Linear(256, 128), LeakyReLU(negative_slope=0.2), Linear(128, 1))
 
 
     def forward(self, data):

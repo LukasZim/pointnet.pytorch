@@ -25,6 +25,7 @@ def train(args, writer):
     # Path to the dataset folder
     # The dataset will be downloaded if it is not yet available in the given folder.
     path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets"
+    dataset_name = "bunny1"
 
     # Apply pre-transformations: normalize, get mesh normals, and sample points on the mesh.
     pre_transform = Compose((
@@ -43,7 +44,7 @@ def train(args, writer):
     ))
 
     # Load datasets.
-    train_dataset = FractureGeomDataset(path, True, transform=transform, pre_transform=pre_transform)
+    train_dataset = FractureGeomDataset(path, True, transform=transform, pre_transform=pre_transform, dataset_name=dataset_name)
 
     # Split the training set into a train/validation set used for early stopping.
     num_samples = len(train_dataset)
@@ -54,7 +55,7 @@ def train(args, writer):
                                                                           args.seed))
 
     # Load the separate test dataset.
-    test_dataset = FractureGeomDataset(path, False, pre_transform=pre_transform)
+    test_dataset = FractureGeomDataset(path, False, pre_transform=pre_transform, dataset_name=dataset_name)
 
     # And setup DataLoaders for each dataset.
     train_loader = DataLoader(
@@ -132,14 +133,12 @@ def train_epoch(epoch, model, device, optimizer, loader, writer):
 def evaluate(model, device, loader):
     """Evaluate the model for on each item in the loader."""
     model.eval()
-    correct = 0
-    total_num = 0
+    total_loss = 0
     for data in loader:
-        pred = model(data.to(device)).max(1)[1]
-        correct += pred.eq(data.y).sum().item()
-        total_num += data.y.size(0)
-    eval_acc = correct / total_num
-    return eval_acc
+        out = model(data.to(device))
+        loss = custom_loss(out, data.y)
+        total_loss += loss.item()
+    return total_loss / len(loader)
 
 
 if __name__ == "__main__":
@@ -148,9 +147,9 @@ if __name__ == "__main__":
     # Optimization hyperparameters.
     parser.add_argument('--batch_size', type=int, default=8, metavar='batch_size',
                         help='Size of batch (default: 8)')
-    parser.add_argument('--epochs', type=int, default=50, metavar='num_epochs',
+    parser.add_argument('--epochs', type=int, default=500, metavar='num_epochs',
                         help='Number of episode to train (default: 50)')
-    parser.add_argument('--num_points', type=int, default=1024, metavar='N',
+    parser.add_argument('--num_points', type=int, default=3301, metavar='N',
                         help='Number of points to use (default: 1024)')
     parser.add_argument('--lr', type=float, default=0.005, metavar='LR',
                         help='Learning rate (default: 0.005)')
