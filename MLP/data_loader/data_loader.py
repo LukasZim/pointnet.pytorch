@@ -208,6 +208,9 @@ class FractureGeomDataset(InMemoryDataset):
 
             filename = self.udf[file_index]
             df = pd.read_pickle(filename)
+            # df = df.head(3)
+            # data.pos = data.pos[:3]
+            # data.face = torch.tensor([[0],[1],[2]])
             udf = df["distance"].values
             label_gt = df["label"].values
 

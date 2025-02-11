@@ -32,7 +32,7 @@ def train(args, writer):
     # Apply pre-transformations: normalize, get mesh normals, and sample points on the mesh.
     pre_transform = Compose((
         # T.NormalizeScale(),
-        GenerateMeshNormals(),
+        # GenerateMeshNormals(),
         # T.SamplePoints(args.num_points * args.sampling_margin, include_normals=True, include_labels=True),
         # T.GeodesicFPS(args.num_points)
     ))
@@ -46,7 +46,7 @@ def train(args, writer):
     ))
 
     # Load datasets.
-    train_dataset = FractureGeomDataset(path, True, dataset_name=dataset_name, pre_transform=pre_transform)
+    train_dataset = FractureGeomDataset(path, True, dataset_name=dataset_name, pre_transform=pre_transform, )
 
     # Split the training set into a train/validation set used for early stopping.
     num_samples = len(train_dataset)
@@ -75,8 +75,8 @@ def train(args, writer):
         in_channels=3,   # There are eight segmentation classes
         conv_channels=[128] * 8,  # We use 8 convolution layers, each with 128 channels
         # conv_channels=[32]*6,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
-        mlp_depth=2,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
-        embedding_size=4000,  # Embed the features in 512 dimensions after convolutions
+        mlp_depth=1,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
+        embedding_size=512,  # Embed the features in 512 dimensions after convolutions
         num_neighbors=args.k,  # The number of neighbors is given as an argument
         grad_regularizer=args.grad_regularizer,  # The regularizer value is given as an argument
         grad_kernel_width=args.grad_kernel,  # The kernel width is given as an argument
@@ -87,15 +87,15 @@ def train(args, writer):
     if not args.evaluating:
         # Setup optimizer and scheduler
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
-
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+        # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=3, verbose=True)
         # Train the model
         # ---------------
 
         best_validation = 0
         best_validation_test_score = 0
         for epoch in tqdm(range(1, args.epochs + 1)):
-            train_epoch(epoch, model, args.device, optimizer, train_loader, writer, loss_function)
+            training_loss = train_epoch(epoch, model, args.device, optimizer, train_loader, writer, loss_function)
             validation_accuracy = evaluate(model, args.device, validation_loader, loss_function)
             writer.add_scalar('validation accuracy', validation_accuracy, epoch)
             test_accuracy = evaluate(model, args.device, test_loader, loss_function)
@@ -108,7 +108,7 @@ def train(args, writer):
             scheduler.step()
     else:
         model.load_state_dict(torch.load(args.checkpoint))
-        best_validation_test_score = evaluate(model, args.device, test_loader)
+        best_validation_test_score = evaluate(model, args.device, test_loader, loss_function)
 
     print("Test accuracy: {}".format(best_validation_test_score))
     visualize_model_output(model, test_loader, args.device, test_dataset)
@@ -133,14 +133,21 @@ def visualize_model_output(model, loader, device, dataset):
 
 
         ps.register_surface_mesh("UDF mesh", vertices, faces, smooth_shade=True)
-
-        ps.get_surface_mesh("UDF mesh").add_scalar_quantity("GT distance scalar", outputs, defined_on="vertices",
+        ps.get_surface_mesh("UDF mesh").add_scalar_quantity("predicted", outputs, defined_on="vertices",
                                                             enabled=True)
-        ps.get_surface_mesh("UDF mesh").add_vector_quantity('normals', data.norm.cpu().numpy(), defined_on="vertices", enabled=True)
-        ps.register_point_cloud("XD", vertices)
-        # ps.get_point_cloud("XD").add_scalar_quantity("GT distance scalar", outputs, )
-        ps.register_point_cloud("transformed_points", data.pos.cpu().numpy())
-        ps.get_point_cloud("transformed_points").add_vector_quantity("normal2s", data.norm.cpu().numpy(),  enabled=True)
+        if hasattr(data, "norm"):
+            ps.get_surface_mesh("UDF mesh").add_vector_quantity('normals', data.norm.cpu().numpy(), defined_on="vertices", enabled=False)
+        ps.get_surface_mesh("UDF mesh").add_scalar_quantity("GT", data.gt_label.cpu().numpy(), defined_on="vertices", enabled=False)
+        ps.get_surface_mesh("UDF mesh").add_scalar_quantity("gt udf", data.y.cpu().numpy(), defined_on="vertices", enabled=False)
+
+        ps.register_point_cloud("XD", vertices, enabled=False)
+        ps.get_point_cloud("XD").add_scalar_quantity("GT distance scalar", outputs, )
+
+        ps.register_point_cloud("transformed_points", data.pos.cpu().numpy(), enabled=False)
+        if hasattr(data, "norm"):
+            ps.get_point_cloud("transformed_points").add_vector_quantity("normal2s", data.norm.cpu().numpy(),  enabled=False)
+        ps.get_point_cloud("transformed_points").add_scalar_quantity("UDF", outputs, enabled=True)
+
         ps.look_at((0., 0., 2.5), (0, 0, 0))
         ps.show()
 
@@ -148,21 +155,22 @@ def visualize_model_output(model, loader, device, dataset):
 def train_epoch(epoch, model, device, optimizer, loader, writer, loss_function):
     """Train the model for one iteration on each item in the loader."""
     model.train()
-    running_loss = 0.0
+    losses = []
 
     for i, data in enumerate(loader):
-        data = data.to(device)
         optimizer.zero_grad()
-        out = model(data)
+        out = model(data.to(device))
+        out = out.squeeze()
         loss = loss_function(out, data.y)
+        loss.backward()
         optimizer.step()
-        running_loss += loss.item()
+        losses.append(loss.item())
     writer.add_scalar('training loss',
-                      running_loss / 50,
+                      np.mean(losses),
                       epoch)
 
-    running_loss = 0.0
     model.train()
+    return np.mean(losses)
 
 
 def evaluate(model, device, loader, loss_function):
@@ -186,9 +194,9 @@ if __name__ == "__main__":
                         help='Size of batch (default: 8)')
     parser.add_argument('--epochs', type=int, default=50, metavar='num_epochs',
                         help='Number of episode to train (default: 50)')
-    parser.add_argument('--num_points', type=int, default=3301, metavar='N',
+    parser.add_argument('--num_points', type=int, default=1024, metavar='N',
                         help='Number of points to use (default: 1024)')
-    parser.add_argument('--lr', type=float, default=0.0005, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.005, metavar='LR',
                         help='Learning rate (default: 0.005)')
 
     # DeltaConv hyperparameters.
