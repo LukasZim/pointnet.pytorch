@@ -1,4 +1,5 @@
 import torch
+from deltaconv.nn import DeltaConv
 from torch import nn
 
 
@@ -41,6 +42,25 @@ class CNN(nn.Module):
         self.conv2 = nn.Conv1d(64, 128, kernel_size=11, padding=5)
         self.conv3 = nn.Conv1d(128, 256, kernel_size=5, padding=2)
         self.conv4 = nn.Conv1d(256, 1, kernel_size=3, padding=1)
+        self.linear = nn.Linear(256, 1)
+
+    def forward(self, x):
+        x = torch.relu(self.conv1(x))
+        x = torch.relu(self.conv2(x))
+        x = torch.relu(self.conv3(x))
+        x = torch.relu(self.conv4(x))
+        # x = torch.relu(self.linear(x))
+        return x
+        # return self.layers(x)
+
+class CNN(nn.Module):
+    def __init__(self, in_channels):
+        super().__init__()
+        self.in_channels = in_channels
+        self.conv1 = DeltaConv(in_channels, 64)
+        self.conv2 = DeltaConv(64, 128)
+        self.conv3 = DeltaConv(128, 256)
+        self.conv4 = DeltaConv(256, 1)
         self.linear = nn.Linear(256, 1)
 
     def forward(self, x):

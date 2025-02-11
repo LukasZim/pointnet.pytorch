@@ -1,5 +1,5 @@
 import torch
-from torch.nn import Sequential as Seq, Dropout, LeakyReLU, Linear
+from torch.nn import Sequential as Seq, Dropout, LeakyReLU, Linear, ReLU6, ReLU, BatchNorm1d
 from torch_geometric.nn import global_max_pool
 
 # from . import DeltaNetBase
@@ -19,8 +19,6 @@ class DeltaNetRegression(torch.nn.Module):
             conv_channels (list[int]): the number of output channels of each convolution.
             mlp_depth (int): the depth of the MLPs of each convolution.
             embedding_size (int): the embedding size before the segmentation head is applied.
-            categorical_vector(bool, optional): whether to use the categorical encoding in the model.
-                Many authors use this in their models for ShapeNet.
             num_neighbors (int): the number of neighbors to use in estimating the gradient.
             grad_regularizer (float): the regularizer value used in the least-squares fitting procedure.
                 In the paper, this value is referred to as \lambda.
@@ -42,8 +40,8 @@ class DeltaNetRegression(torch.nn.Module):
 
 
         self.segmentation_head = Seq(
-            MLP([embedding_size + sum(conv_channels), 256]), Dropout(0.5), MLP([256, 256]), Dropout(0.5),
-            Linear(256, 128), LeakyReLU(negative_slope=0.2), Linear(128, 1))
+            MLP([embedding_size + sum(conv_channels), 256]), ReLU(), MLP([256, 256]), ReLU(),
+            Linear(256, 128), ReLU(), Linear(128, 1))
 
 
     def forward(self, data):

@@ -1,5 +1,7 @@
 import os, time, argparse
 import os.path as osp
+
+import numpy as np
 from progressbar import progressbar
 
 import torch
@@ -10,7 +12,7 @@ from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
 from MLP.model.deltanet_regression import DeltaNetRegression
-from MLP.model.loss import custom_loss
+from MLP.model.loss import l2_loss, l1_loss, custom_loss
 from data_loader.data_loader import FractureGeomDataset
 import deltaconv.transforms as T
 from deltaconv.models import DeltaNetSegmentation
@@ -29,13 +31,13 @@ def train(args, writer):
 
     # Apply pre-transformations: normalize, get mesh normals, and sample points on the mesh.
     pre_transform = Compose((
-        T.NormalizeArea(),
-        T.NormalizeAxes(),
+        # T.NormalizeScale(),
         GenerateMeshNormals(),
-        T.SamplePoints(args.num_points * args.sampling_margin, include_normals=True, include_labels=True),
-        T.GeodesicFPS(args.num_points)
+        # T.SamplePoints(args.num_points * args.sampling_margin, include_normals=True, include_labels=True),
+        # T.GeodesicFPS(args.num_points)
     ))
 
+    # pre_transform = T.GeodesicFPS(args.num_points)
     # Transformations during training: random scale, rotation, and translation.
     transform = Compose((
         T.RandomScale((0.8, 1.2)),
@@ -44,7 +46,7 @@ def train(args, writer):
     ))
 
     # Load datasets.
-    train_dataset = FractureGeomDataset(path, True, transform=transform, pre_transform=pre_transform, dataset_name=dataset_name)
+    train_dataset = FractureGeomDataset(path, True, dataset_name=dataset_name, pre_transform=pre_transform)
 
     # Split the training set into a train/validation set used for early stopping.
     num_samples = len(train_dataset)
@@ -55,7 +57,7 @@ def train(args, writer):
                                                                           args.seed))
 
     # Load the separate test dataset.
-    test_dataset = FractureGeomDataset(path, False, pre_transform=pre_transform, dataset_name=dataset_name)
+    test_dataset = FractureGeomDataset(path, False, dataset_name=dataset_name, pre_transform=pre_transform)
 
     # And setup DataLoaders for each dataset.
     train_loader = DataLoader(
@@ -73,12 +75,14 @@ def train(args, writer):
         in_channels=3,   # There are eight segmentation classes
         conv_channels=[128] * 8,  # We use 8 convolution layers, each with 128 channels
         # conv_channels=[32]*6,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
-        mlp_depth=1,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
-        embedding_size=512,  # Embed the features in 512 dimensions after convolutions
+        mlp_depth=2,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
+        embedding_size=4000,  # Embed the features in 512 dimensions after convolutions
         num_neighbors=args.k,  # The number of neighbors is given as an argument
         grad_regularizer=args.grad_regularizer,  # The regularizer value is given as an argument
         grad_kernel_width=args.grad_kernel,  # The kernel width is given as an argument
     ).to(args.device)
+
+    loss_function = custom_loss
 
     if not args.evaluating:
         # Setup optimizer and scheduler
@@ -91,10 +95,10 @@ def train(args, writer):
         best_validation = 0
         best_validation_test_score = 0
         for epoch in tqdm(range(1, args.epochs + 1)):
-            train_epoch(epoch, model, args.device, optimizer, train_loader, writer)
-            validation_accuracy = evaluate(model, args.device, validation_loader)
+            train_epoch(epoch, model, args.device, optimizer, train_loader, writer, loss_function)
+            validation_accuracy = evaluate(model, args.device, validation_loader, loss_function)
             writer.add_scalar('validation accuracy', validation_accuracy, epoch)
-            test_accuracy = evaluate(model, args.device, test_loader)
+            test_accuracy = evaluate(model, args.device, test_loader, loss_function)
             writer.add_scalar('test accuracy', test_accuracy, epoch)
 
             if validation_accuracy > best_validation:
@@ -107,51 +111,84 @@ def train(args, writer):
         best_validation_test_score = evaluate(model, args.device, test_loader)
 
     print("Test accuracy: {}".format(best_validation_test_score))
+    visualize_model_output(model, test_loader, args.device, test_dataset)
 
 
-def train_epoch(epoch, model, device, optimizer, loader, writer):
+def visualize_model_output(model, loader, device, dataset):
+    model.eval()
+    for data in loader:
+
+        vertices =  data.pos.cpu().numpy()
+        faces = dataset.mesh_triangles
+        vertices = dataset.mesh_vertices
+
+        out = model(data.to(device))
+        outputs = out.detach().cpu().numpy().reshape(-1)
+
+        import polyscope as ps
+
+        ps.set_window_size(1920, 1080)
+        ps.init()
+
+
+
+        ps.register_surface_mesh("UDF mesh", vertices, faces, smooth_shade=True)
+
+        ps.get_surface_mesh("UDF mesh").add_scalar_quantity("GT distance scalar", outputs, defined_on="vertices",
+                                                            enabled=True)
+        ps.get_surface_mesh("UDF mesh").add_vector_quantity('normals', data.norm.cpu().numpy(), defined_on="vertices", enabled=True)
+        ps.register_point_cloud("XD", vertices)
+        # ps.get_point_cloud("XD").add_scalar_quantity("GT distance scalar", outputs, )
+        ps.register_point_cloud("transformed_points", data.pos.cpu().numpy())
+        ps.get_point_cloud("transformed_points").add_vector_quantity("normal2s", data.norm.cpu().numpy(),  enabled=True)
+        ps.look_at((0., 0., 2.5), (0, 0, 0))
+        ps.show()
+
+
+def train_epoch(epoch, model, device, optimizer, loader, writer, loss_function):
     """Train the model for one iteration on each item in the loader."""
     model.train()
     running_loss = 0.0
 
     for i, data in enumerate(loader):
+        data = data.to(device)
         optimizer.zero_grad()
-        out = model(data.to(device))
-        loss = custom_loss(out, data.y)
-        loss.backward()
+        out = model(data)
+        loss = loss_function(out, data.y)
         optimizer.step()
         running_loss += loss.item()
-        if i % 50 == 49:
-            writer.add_scalar('training loss',
-                              running_loss / 50,
-                              epoch * len(loader) + i)
+    writer.add_scalar('training loss',
+                      running_loss / 50,
+                      epoch)
 
-            running_loss = 0.0
+    running_loss = 0.0
     model.train()
 
 
-def evaluate(model, device, loader):
+def evaluate(model, device, loader, loss_function):
     """Evaluate the model for on each item in the loader."""
     model.eval()
     total_loss = 0
     for data in loader:
         out = model(data.to(device))
-        loss = custom_loss(out, data.y)
+        loss = loss_function(out, data.y)
         total_loss += loss.item()
     return total_loss / len(loader)
+
+
 
 
 if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser(description='DeltaNet Segmentation')
     # Optimization hyperparameters.
-    parser.add_argument('--batch_size', type=int, default=8, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=1, metavar='batch_size',
                         help='Size of batch (default: 8)')
-    parser.add_argument('--epochs', type=int, default=500, metavar='num_epochs',
+    parser.add_argument('--epochs', type=int, default=50, metavar='num_epochs',
                         help='Number of episode to train (default: 50)')
     parser.add_argument('--num_points', type=int, default=3301, metavar='N',
                         help='Number of points to use (default: 1024)')
-    parser.add_argument('--lr', type=float, default=0.005, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.0005, metavar='LR',
                         help='Learning rate (default: 0.005)')
 
     # DeltaConv hyperparameters.
@@ -173,6 +210,9 @@ if __name__ == "__main__":
                         help='random seed (default: 1)')
 
     # Evaluation.
+    # parser.add_argument('--checkpoint', type=str, default='/home/lukasz/Documents/pointnet.pytorch/MLP/runs/shapeseg/06Feb25_17_33/checkpoints/best.pt',
+    #                     help='Path to the checkpoint to evaluate. The script will only evaluate if a path is given.')
+
     parser.add_argument('--checkpoint', type=str, default='',
                         help='Path to the checkpoint to evaluate. The script will only evaluate if a path is given.')
 
@@ -218,3 +258,5 @@ if __name__ == "__main__":
     # Start training process
     torch.manual_seed(args.seed)
     train(args, writer)
+
+

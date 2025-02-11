@@ -157,6 +157,8 @@ class FractureGeomDataset(InMemoryDataset):
         self.udf = {}
         self.impulse = {}
         self.files_used = 0
+        self.mesh_vertices = []
+        self.mesh_triangles = []
         for file in os.listdir(os.path.join(root, self.used_dataset_name)):
             if not file.split(".")[-1] == "pkl":
                 continue
@@ -197,10 +199,13 @@ class FractureGeomDataset(InMemoryDataset):
 
         # read faces from obj file
         mesh = read_obj(os.path.join(self.root, self.used_dataset_name, self.used_dataset_name + ".obj"))
-
+        self.mesh_vertices = mesh.pos.cpu().numpy()
+        self.mesh_triangles = mesh.face.cpu().numpy().T
         # loop over all files in dir
         for file_index in tqdm(range(self.files_used)):
             data = read_obj(os.path.join(self.root, self.used_dataset_name, self.used_dataset_name + ".obj"))
+            # visualize_mesh_from_data_obj(data)
+
             filename = self.udf[file_index]
             df = pd.read_pickle(filename)
             udf = df["distance"].values
@@ -212,6 +217,7 @@ class FractureGeomDataset(InMemoryDataset):
             data.y = torch.tensor(udf, dtype=torch.float32)
             data.gt_label = torch.tensor(label_gt, dtype=torch.int64)
             data.impulse = torch.tensor(impulse, dtype=torch.float32)
+            # data.x = torch.tensor(impulse, dtype=torch.float32).repeat(udf.shape[0], 1)
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue
             if self.pre_transform is not None:
@@ -222,7 +228,7 @@ class FractureGeomDataset(InMemoryDataset):
                 data_list_test.append(data)
             else:
                 data_list_validate.append(data)
-
+            # visualize_mesh_from_data_obj(data)
         torch.save(self.collate(data_list), self.processed_paths[0])
         torch.save(self.collate(data_list), self.processed_paths[1]) #TODO: REVERT THIS ONE
         # torch.save(self.collate(data_list_validate), self.processed_paths[2])
@@ -236,4 +242,23 @@ class FractureGeomDataset(InMemoryDataset):
 
 
 
+def visualize_mesh_from_data_obj(data):
+    import polyscope as ps
+    ps.set_window_size(1920, 1080)
+    ps.init()
 
+    pos = data.pos
+    face = data.face
+
+    gt = data.y.cpu().numpy()
+
+    vertices = pos.cpu().numpy()
+    faces = face.cpu().numpy().T
+
+    ps.register_surface_mesh("UDF mesh", vertices, faces, smooth_shade=True)
+
+    ps.get_surface_mesh("UDF mesh").add_scalar_quantity("GT distance scalar", gt, defined_on="vertices",
+                                                        enabled=True)
+
+    ps.look_at((0., 0., 2.5), (0, 0, 0))
+    ps.show()
