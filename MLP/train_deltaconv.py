@@ -27,12 +27,12 @@ def train(args, writer):
     # Path to the dataset folder
     # The dataset will be downloaded if it is not yet available in the given folder.
     path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets"
-    dataset_name = "bunny1"
+    dataset_name = "bunny"
 
     # Apply pre-transformations: normalize, get mesh normals, and sample points on the mesh.
     pre_transform = Compose((
-        # T.NormalizeScale(),
-        # GenerateMeshNormals(),
+        T.NormalizeScale(),
+        GenerateMeshNormals(),
         # T.SamplePoints(args.num_points * args.sampling_margin, include_normals=True, include_labels=True),
         # T.GeodesicFPS(args.num_points)
     ))
@@ -72,10 +72,10 @@ def train(args, writer):
 
     # Create the model.
     model = DeltaNetRegression(
-        in_channels=3,   # There are eight segmentation classes
-        conv_channels=[128] * 8,  # We use 8 convolution layers, each with 128 channels
-        # conv_channels=[32]*6,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
-        mlp_depth=1,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
+        in_channels=9,   # There are eight segmentation classes
+        # conv_channels=[128] * 5,  # We use 8 convolution layers, each with 128 channels
+        conv_channels=[32]*4,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
+        mlp_depth=3,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
         embedding_size=512,  # Embed the features in 512 dimensions after convolutions
         num_neighbors=args.k,  # The number of neighbors is given as an argument
         grad_regularizer=args.grad_regularizer,  # The regularizer value is given as an argument
@@ -100,6 +100,8 @@ def train(args, writer):
             writer.add_scalar('validation accuracy', validation_accuracy, epoch)
             test_accuracy = evaluate(model, args.device, test_loader, loss_function)
             writer.add_scalar('test accuracy', test_accuracy, epoch)
+            writer.add_scalars("Loss comparison", {"Train": training_loss,
+                                                    "Test": validation_accuracy}, epoch)
 
             if validation_accuracy > best_validation:
                 best_validation = validation_accuracy
@@ -116,40 +118,44 @@ def train(args, writer):
 
 def visualize_model_output(model, loader, device, dataset):
     model.eval()
-    for data in loader:
-
+    for batch in loader:
+        data = batch
         vertices =  data.pos.cpu().numpy()
         faces = dataset.mesh_triangles
         vertices = dataset.mesh_vertices
 
         out = model(data.to(device))
-        outputs = out.detach().cpu().numpy().reshape(-1)
+        for i in range(batch.num_graphs):
+            out_i = out[batch.batch == i]
+            outputs = out_i.detach().cpu().numpy().reshape(-1)
 
-        import polyscope as ps
+            data = batch[i]
 
-        ps.set_window_size(1920, 1080)
-        ps.init()
+            import polyscope as ps
+
+            ps.set_window_size(1920, 1080)
+            ps.init()
 
 
 
-        ps.register_surface_mesh("UDF mesh", vertices, faces, smooth_shade=True)
-        ps.get_surface_mesh("UDF mesh").add_scalar_quantity("predicted", outputs, defined_on="vertices",
-                                                            enabled=True)
-        if hasattr(data, "norm"):
-            ps.get_surface_mesh("UDF mesh").add_vector_quantity('normals', data.norm.cpu().numpy(), defined_on="vertices", enabled=False)
-        ps.get_surface_mesh("UDF mesh").add_scalar_quantity("GT", data.gt_label.cpu().numpy(), defined_on="vertices", enabled=False)
-        ps.get_surface_mesh("UDF mesh").add_scalar_quantity("gt udf", data.y.cpu().numpy(), defined_on="vertices", enabled=False)
+            ps.register_surface_mesh("UDF mesh", vertices, faces, smooth_shade=True)
+            ps.get_surface_mesh("UDF mesh").add_scalar_quantity("predicted", outputs, defined_on="vertices",
+                                                                enabled=True)
+            if hasattr(data, "norm"):
+                ps.get_surface_mesh("UDF mesh").add_vector_quantity('normals', data.norm.cpu().numpy(), defined_on="vertices", enabled=False)
+            ps.get_surface_mesh("UDF mesh").add_scalar_quantity("GT", data.gt_label.cpu().numpy(), defined_on="vertices", enabled=False)
+            ps.get_surface_mesh("UDF mesh").add_scalar_quantity("gt udf", data.y.cpu().numpy(), defined_on="vertices", enabled=False)
 
-        ps.register_point_cloud("XD", vertices, enabled=False)
-        ps.get_point_cloud("XD").add_scalar_quantity("GT distance scalar", outputs, )
+            ps.register_point_cloud("XD", vertices, enabled=False)
+            ps.get_point_cloud("XD").add_scalar_quantity("GT distance scalar", outputs, )
 
-        ps.register_point_cloud("transformed_points", data.pos.cpu().numpy(), enabled=False)
-        if hasattr(data, "norm"):
-            ps.get_point_cloud("transformed_points").add_vector_quantity("normal2s", data.norm.cpu().numpy(),  enabled=False)
-        ps.get_point_cloud("transformed_points").add_scalar_quantity("UDF", outputs, enabled=True)
+            ps.register_point_cloud("transformed_points", data.pos.cpu().numpy(), enabled=False)
+            if hasattr(data, "norm"):
+                ps.get_point_cloud("transformed_points").add_vector_quantity("normal2s", data.norm.cpu().numpy(),  enabled=False)
+            ps.get_point_cloud("transformed_points").add_scalar_quantity("UDF", outputs, enabled=True)
 
-        ps.look_at((0., 0., 2.5), (0, 0, 0))
-        ps.show()
+            ps.look_at((0., 0., 2.5), (0, 0, 0))
+            ps.show()
 
 
 def train_epoch(epoch, model, device, optimizer, loader, writer, loss_function):
@@ -176,12 +182,21 @@ def train_epoch(epoch, model, device, optimizer, loader, writer, loss_function):
 def evaluate(model, device, loader, loss_function):
     """Evaluate the model for on each item in the loader."""
     model.eval()
-    total_loss = 0
+    losses = []
     for data in loader:
-        out = model(data.to(device))
+        data = data.to(device)
+
+        # data.x = data.x.clone().detach().requires_grad_(True)
+        out = model(data)
+        out = out.squeeze()
+
         loss = loss_function(out, data.y)
-        total_loss += loss.item()
-    return total_loss / len(loader)
+        # loss.backward()
+        # print(data.x.grad)
+        # np.mean(np.abs(data.x.grad.cpu().numpy()), axis=0)
+        losses.append(loss.item())
+    return np.mean(losses)
+
 
 
 
@@ -190,7 +205,7 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser(description='DeltaNet Segmentation')
     # Optimization hyperparameters.
-    parser.add_argument('--batch_size', type=int, default=1, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=4, metavar='batch_size',
                         help='Size of batch (default: 8)')
     parser.add_argument('--epochs', type=int, default=50, metavar='num_epochs',
                         help='Number of episode to train (default: 50)')

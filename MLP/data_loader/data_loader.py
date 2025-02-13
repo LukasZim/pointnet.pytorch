@@ -185,7 +185,7 @@ class FractureGeomDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ['training.pt', 'test.pt', 'validate.pt']
+        return ['training.pt', 'test.pt', 'xd']
         # return list of file names containing training and test data
 
 
@@ -221,6 +221,7 @@ class FractureGeomDataset(InMemoryDataset):
             data.gt_label = torch.tensor(label_gt, dtype=torch.int64)
             data.impulse = torch.tensor(impulse, dtype=torch.float32)
             # data.x = torch.tensor(impulse, dtype=torch.float32).repeat(udf.shape[0], 1)
+            data.x = torch.cat((data.pos, torch.tensor(impulse, dtype=torch.float32).repeat(udf.shape[0], 1)), dim=1)
             if self.pre_filter is not None and not self.pre_filter(data):
                 continue
             if self.pre_transform is not None:
