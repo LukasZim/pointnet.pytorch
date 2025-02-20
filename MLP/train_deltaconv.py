@@ -13,74 +13,42 @@ from tqdm import tqdm
 
 from MLP.model.deltanet_regression import DeltaNetRegression
 from MLP.model.loss import l2_loss, l1_loss, custom_loss
-from data_loader.data_loader import FractureGeomDataset
 import deltaconv.transforms as T
 from deltaconv.models import DeltaNetSegmentation
 
 from deltaconv.experiments.utils import calc_loss
 
 
-def train(args, writer):
+def train(args, writer, train_loader, test_loader, validation_loader, model=None):
     # Data preparation
     # ----------------
 
     # Path to the dataset folder
     # The dataset will be downloaded if it is not yet available in the given folder.
-    path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets"
-    dataset_name = "bunny"
 
-    # Apply pre-transformations: normalize, get mesh normals, and sample points on the mesh.
-    pre_transform = Compose((
-        T.NormalizeScale(),
-        GenerateMeshNormals(),
-        # T.SamplePoints(args.num_points * args.sampling_margin, include_normals=True, include_labels=True),
-        # T.GeodesicFPS(args.num_points)
-    ))
 
-    # pre_transform = T.GeodesicFPS(args.num_points)
-    # Transformations during training: random scale, rotation, and translation.
-    transform = Compose((
-        T.RandomScale((0.8, 1.2)),
-        T.RandomRotate(360, axis=2),
-        T.RandomTranslateGlobal(0.1)
-    ))
 
     # Load datasets.
-    train_dataset = FractureGeomDataset(path, True, dataset_name=dataset_name, pre_transform=pre_transform, )
-
-    # Split the training set into a train/validation set used for early stopping.
-    num_samples = len(train_dataset)
-    num_train = int(num_samples * 0.9)
-    num_validation = num_samples - num_train
-    train_dataset, validation_dataset = torch.utils.data.random_split(train_dataset, [num_train, num_validation],
-                                                                      generator=torch.Generator().manual_seed(
-                                                                          args.seed))
-
-    # Load the separate test dataset.
-    test_dataset = FractureGeomDataset(path, False, dataset_name=dataset_name, pre_transform=pre_transform)
 
     # And setup DataLoaders for each dataset.
-    train_loader = DataLoader(
-        train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=0, drop_last=True)
-    validation_loader = DataLoader(
-        validation_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
-    test_loader = DataLoader(
-        test_dataset, batch_size=args.batch_size, shuffle=False, num_workers=0, drop_last=False)
 
     # Model and optimization
     # ----------------------
 
     # Create the model.
-    model = DeltaNetRegression(
-        in_channels=9,   # There are eight segmentation classes
-        # conv_channels=[128] * 5,  # We use 8 convolution layers, each with 128 channels
-        conv_channels=[32]*4,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
-        mlp_depth=3,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
-        embedding_size=512,  # Embed the features in 512 dimensions after convolutions
-        num_neighbors=args.k,  # The number of neighbors is given as an argument
-        grad_regularizer=args.grad_regularizer,  # The regularizer value is given as an argument
-        grad_kernel_width=args.grad_kernel,  # The kernel width is given as an argument
-    ).to(args.device)
+    if model is None:
+        model = DeltaNetRegression(
+            in_channels=9,   # There are eight segmentation classes
+            # conv_channels=[128] * 5,  # We use 8 convolution layers, each with 128 channels
+            conv_channels=[32]*4,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
+            mlp_depth=3,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
+            embedding_size=512,  # Embed the features in 512 dimensions after convolutions
+            num_neighbors=args.k,  # The number of neighbors is given as an argument
+            grad_regularizer=args.grad_regularizer,  # The regularizer value is given as an argument
+            grad_kernel_width=args.grad_kernel,  # The kernel width is given as an argument
+        ).to(args.device)
+    else:
+        model = model.to(args.device)
 
     loss_function = custom_loss
 
@@ -113,7 +81,8 @@ def train(args, writer):
         best_validation_test_score = evaluate(model, args.device, test_loader, loss_function)
 
     print("Test accuracy: {}".format(best_validation_test_score))
-    visualize_model_output(model, test_loader, args.device, test_dataset)
+    # visualize_model_output(model, test_loader, args.device, test_dataset)
+    return model
 
 
 def visualize_model_output(model, loader, device, dataset):
@@ -202,6 +171,8 @@ def evaluate(model, device, loader, loss_function):
 
 
 if __name__ == "__main__":
+
+    from data_loader.data_loader import FractureGeomDataset
     # Parse arguments
     parser = argparse.ArgumentParser(description='DeltaNet Segmentation')
     # Optimization hyperparameters.
@@ -280,6 +251,120 @@ if __name__ == "__main__":
 
     # Start training process
     torch.manual_seed(args.seed)
-    train(args, writer)
+
+    path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets"
+    dataset_name = "bunny"
+    batch_size = 6
+    num_workers = 4
 
 
+    # Apply pre-transformations: normalize, get mesh normals, and sample points on the mesh.
+    pre_transform = Compose((
+        T.NormalizeScale(),
+        GenerateMeshNormals(),
+        # T.SamplePoints(args.num_points * args.sampling_margin, include_normals=True, include_labels=True),
+        # T.GeodesicFPS(args.num_points)
+    ))
+
+    # pre_transform = T.GeodesicFPS(args.num_points)
+    # Transformations during training: random scale, rotation, and translation.
+    transform = Compose((
+        T.RandomScale((0.8, 1.2)),
+        T.RandomRotate(360, axis=2),
+        T.RandomTranslateGlobal(0.1)
+    ))
+
+    train_dataset = FractureGeomDataset(path, 'train', dataset_name=dataset_name, pre_transform=pre_transform, )
+    test_dataset = FractureGeomDataset(path, 'test', dataset_name=dataset_name, pre_transform=pre_transform)
+    validation_dataset = FractureGeomDataset(path, 'validation', dataset_name=dataset_name, pre_transform=pre_transform)
+
+    train_loader = DataLoader(
+        train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True)
+    validation_loader = DataLoader(
+        validation_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
+    test_loader = DataLoader(
+        test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
+
+
+
+
+    train(args, writer, train_loader, test_loader, validation_loader)
+
+def train_deltaconv(writer, epochs, model, train_loader, test_loader, validation_loader, ):
+    # Parse arguments
+    parser = argparse.ArgumentParser(description='DeltaNet Segmentation')
+    # Optimization hyperparameters.
+    parser.add_argument('--batch_size', type=int, default=6, metavar='batch_size',
+                        help='Size of batch (default: 8)')
+    parser.add_argument('--epochs', type=int, default=epochs, metavar='num_epochs',
+                        help='Number of episode to train (default: 50)')
+    parser.add_argument('--num_points', type=int, default=1024, metavar='N',
+                        help='Number of points to use (default: 1024)')
+    parser.add_argument('--lr', type=float, default=0.005, metavar='LR',
+                        help='Learning rate (default: 0.005)')
+
+    # DeltaConv hyperparameters.
+    parser.add_argument('--k', type=int, default=20, metavar='K',
+                        help='Number of nearest neighbors to use (default: 20)')
+    parser.add_argument('--grad_kernel', type=float, default=1, metavar='h',
+                        help='Kernel size for WLS, as a factor of the average edge length (default: 1)')
+    parser.add_argument('--grad_regularizer', type=float, default=0.001, metavar='lambda',
+                        help='Regularizer lambda to use for WLS (default: 0.001)')
+
+    # Dataset generation arguments.
+    parser.add_argument('--sampling_margin', type=int, default=8, metavar='sampling_margin',
+                        help='The number of points to sample before using FPS to downsample (default: 8)')
+
+    # Logging and debugging.
+    parser.add_argument('--logdir', type=str, default='', metavar='logdir',
+                        help='Root directory of log files. Log is stored in LOGDIR/runs/EXPERIMENT_NAME/TIME. (default: FILE_PATH)')
+    parser.add_argument('--seed', type=int, default=1, metavar='S',
+                        help='random seed (default: 1)')
+
+    # Evaluation.
+    # parser.add_argument('--checkpoint', type=str, default='/home/lukasz/Documents/pointnet.pytorch/MLP/runs/shapeseg/06Feb25_17_33/checkpoints/best.pt',
+    #                     help='Path to the checkpoint to evaluate. The script will only evaluate if a path is given.')
+
+    parser.add_argument('--checkpoint', type=str, default='',
+                        help='Path to the checkpoint to evaluate. The script will only evaluate if a path is given.')
+
+    args = parser.parse_args()
+
+    # If a checkpoint is given, evaluate the model rather than training.
+    args.evaluating = args.checkpoint != ''
+
+    # Determine the device to run the experiment
+    args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+    # Name the experiment, used to store logs and checkpoints.
+    args.experiment_name = 'shapeseg'
+    run_time = time.strftime("%d%b%y_%H_%M", time.localtime(time.time()))
+
+    if not args.evaluating:
+        # Set log directory and create TensorBoard writer in log directory.
+        if args.logdir == '':
+            args.logdir = osp.dirname(osp.realpath(__file__))
+        args.logdir = osp.join(args.logdir, 'runs', args.experiment_name, run_time)
+
+        # Create directory to store checkpoints.
+        args.checkpoint_dir = osp.join(args.logdir, 'checkpoints')
+        if not os.path.exists(args.checkpoint_dir):
+            os.makedirs(args.checkpoint_dir)
+
+        # Write experimental details to log directory.
+        experiment_details = args.experiment_name + '\n--\nSettings:\n--\n'
+        for arg in vars(args):
+            experiment_details += '{}: {}\n'.format(arg, getattr(args, arg))
+        with open(os.path.join(args.logdir, 'settings.txt'), 'w') as f:
+            f.write(experiment_details)
+
+        # And show experiment details in console.
+        print(experiment_details)
+        print('---')
+        print('Training...')
+    else:
+        print('Evaluating {}...'.format(args.experiment_name))
+
+    # Start training process
+    torch.manual_seed(args.seed)
+    return train(args, writer, train_loader, test_loader, validation_loader, model=model)

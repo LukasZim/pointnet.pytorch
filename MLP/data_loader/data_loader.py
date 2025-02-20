@@ -151,7 +151,7 @@ class FractureGeomDataset(InMemoryDataset):
     # set folders for MIT dataset
 
     # root should be MLP/datasets
-    def __init__(self, root, train=True, transform=None, pre_transform=None,
+    def __init__(self, root, split='train', transform=None, pre_transform=None,
                  pre_filter=None, dataset_name="bunny"):
         self.used_dataset_name = dataset_name
         self.udf = {}
@@ -173,8 +173,15 @@ class FractureGeomDataset(InMemoryDataset):
 
         super(FractureGeomDataset, self).__init__(root, transform, pre_transform)
         # set processed path
-        path = self.processed_paths[0] if train else self.processed_paths[1]
-        # load data from path
+        if split == 'train':
+            path = self.processed_paths[0]
+        elif split == 'validation':
+            path = self.processed_paths[1]
+        elif split == 'test':
+            path = self.processed_paths[2]
+        else:
+            raise ValueError((f'Split {split} found, but expected either '
+                              'train, val, trainval or test'))
         self.data, self.slices = torch.load(path)
 
     @property
@@ -185,7 +192,7 @@ class FractureGeomDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ['training.pt', 'test.pt', 'xd']
+        return ['training.pt', 'test.pt', 'validate.pt']
         # return list of file names containing training and test data
 
 
@@ -235,7 +242,7 @@ class FractureGeomDataset(InMemoryDataset):
             # visualize_mesh_from_data_obj(data)
         torch.save(self.collate(data_list), self.processed_paths[0])
         torch.save(self.collate(data_list), self.processed_paths[1]) #TODO: REVERT THIS ONE
-        # torch.save(self.collate(data_list_validate), self.processed_paths[2])
+        torch.save(self.collate(data_list_validate), self.processed_paths[2])
 
         # save data_list to disk, after applying self.collate to the data_list
 
