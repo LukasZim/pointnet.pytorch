@@ -132,8 +132,8 @@ def FractureDataLoader(path, type):
     #
     # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    dataset = FractureDataset(path, chunk_size=3300, dataset_type=type)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=16, shuffle=True, num_workers=4, )
+    dataset = FractureDataset(path, chunk_size=500, dataset_type=type)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, )
 
     return dataloader, dataset
 

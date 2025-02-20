@@ -8,30 +8,35 @@ from MLP.helper_functions import append_impulse_to_data
 from MLP.region_growing import RegionGrowing
 
 
-def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_values=10, edge=False):
-    start_time = time.time()
+def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_chamfer_values=10, edge=False):
     chamfer_values = []
+    num_non_fractures = 0
 
-    for _ in range(num_values):
-        pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_random_GT()
+    for i in range(num_chamfer_values):
+        pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(i)
         labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
         if edge:
             chamfer = contour_chamfer_distance(np.asarray(mesh.vertices), np.asarray(mesh.triangles), labels, gt_labels)
         else:
             chamfer, _ = minimum_chamfer_distance(np.asarray(mesh.vertices), labels, gt_labels)
+        if chamfer == float('inf'):
+            num_non_fractures += 1
+        else:
+            chamfer_values.append(chamfer)
 
-        chamfer_values.append(chamfer)
-    print("Chamfer values calculation Duration:", time.time() - start_time)
+    if len(chamfer_values) == 0:
+        return -1, num_non_fractures
 
-    return np.mean(chamfer_values)
+
+    return np.mean(chamfer_values), num_non_fractures
 
 
 def get_model_output(mesh, pcd, impulse, model, gt_udf):
     from MLP.train import run_model
-    pcd = torch.from_numpy(pcd).float().unsqueeze(0)
-    impulse = torch.from_numpy(impulse).float().unsqueeze(0)
+    pcd = torch.from_numpy(pcd).float()
+    impulse = torch.from_numpy(impulse).float()
     gt_udf = torch.from_numpy(gt_udf).float()
-    outputs, _ = run_model(pcd, gt_udf, impulse, model, train=False)
+    outputs, _ = run_model(pcd, gt_udf, impulse, model,  train=False)
 
     predicted_udf = np.array(outputs.squeeze().tolist())
 

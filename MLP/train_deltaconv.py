@@ -205,7 +205,7 @@ if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser(description='DeltaNet Segmentation')
     # Optimization hyperparameters.
-    parser.add_argument('--batch_size', type=int, default=4, metavar='batch_size',
+    parser.add_argument('--batch_size', type=int, default=6, metavar='batch_size',
                         help='Size of batch (default: 8)')
     parser.add_argument('--epochs', type=int, default=50, metavar='num_epochs',
                         help='Number of episode to train (default: 50)')

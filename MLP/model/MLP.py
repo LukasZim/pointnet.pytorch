@@ -23,6 +23,21 @@ class MLP(nn.Module):
         return self.layers(x)
 
 
+class MLP_constant(nn.Module):
+    def __init__(self, in_channels, num_layers, layer_size):
+        super().__init__()
+        self.in_channels = in_channels
+        self.num_layers = num_layers
+        self.layer_size = layer_size
+        self.layers = nn.Sequential(
+            nn.Linear(in_channels, layer_size),
+            nn.ReLU(),
+            *[nn.Sequential(nn.Linear(layer_size, layer_size), nn.ReLU()) for _ in range(num_layers)],
+            nn.Linear(layer_size, 1),
+        )
+
+    def forward(self, x):
+        return self.layers(x)
 
 class CNN(nn.Module):
     def __init__(self, in_channels):

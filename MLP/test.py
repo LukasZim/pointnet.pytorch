@@ -18,10 +18,6 @@ from MLP.path import Path
 from MLP.region_growing import RegionGrowing
 from MLP.visualize import load_mesh_from_file
 
-log_root = "runs"
-latest_run = max(glob(f"{log_root}/*"), key=os.path.getmtime)
-print(latest_run)
-tensorboard_writer = SummaryWriter(log_dir="runs/MLP")
 
 def calculate_gradient(model, point):
     t = torch.from_numpy(point).float()
@@ -117,7 +113,7 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
 
     ps.get_surface_mesh("UDF mesh").add_scalar_quantity("label GT", label_gt, defined_on="vertices", enabled=False)
 
-    ps.get_surface_mesh("UDF mesh").add_vector_quantity("gradients vector", gradients, defined_on="vertices",
+    ps.get_surface_mesh("UDF mesh").add_vector_quantity("gradients vector", gradients.reshape(-1, 3), defined_on="vertices",
                                                         enabled=False)
 
     ps.get_surface_mesh("UDF mesh").add_scalar_quantity("distance scalar", distances, defined_on="vertices",
@@ -144,14 +140,19 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
 
 
 def visualize():
-    model = CNN(9)
-    state = torch.load("checkpoints/300.pth")
+    log_root = "runs"
+    latest_run = max(glob(f"{log_root}/*"), key=os.path.getmtime)
+    print(latest_run)
+    tensorboard_writer = SummaryWriter(log_dir="runs/MLP")
+
+    model = MLP(9)
+    state = torch.load("checkpoints/180.pth")
     model.load_state_dict(state['state_dict'])
     index_to_use = 1
 
     validate_dataloader, validate_dataset = FractureDataLoader(Path().path, type="validate")
     X, y, impulse, label_gt, label_edge = validate_dataset.get_GT(index_to_use)
-    # y = state['y']
+
     mesh_path = state['mesh_path']
     mesh = load_mesh_from_file(mesh_path)
 
@@ -165,11 +166,12 @@ def visualize():
     time_start = time.time()
 
     from MLP.train import run_model
-    X = torch.tensor(X)
-    y = torch.tensor(y)
-    impulse = torch.tensor(impulse)
+    X = torch.from_numpy(X).float()
+    y = torch.from_numpy(y).float()
+    impulse = torch.from_numpy(impulse).float()
 
-    outputs, test_data = run_model(X.unsqueeze(0), y.unsqueeze(0), impulse.unsqueeze(0), model, requires_grad=True)
+    model.eval()
+    outputs, test_data = run_model(X, y, impulse, model, train=False)
     test_targets = y.float()
 
     print("duration_eval: ", time.time() - time_start)
@@ -177,7 +179,7 @@ def visualize():
 
     outputs.sum().backward()
     gradients = test_data.grad
-    gradients = gradients.squeeze().permute(1,0)
+    # gradients = gradients.squeeze().permute(1,0)
     print("gradient:", test_data.grad)
     predicted_udf = outputs.squeeze().tolist()
 
@@ -209,7 +211,7 @@ def visualize():
     print("duration:",duration)
     labels = np.array([remap_label(label, key_map) for label in labels])
 
-    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, test_targets, mesh, model, labels, impulse, label_gt)
+    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, test_targets, mesh, model, labels, impulse, label_gt, tensorboard_writer)
 
 def remap_label(label, key_map):
     for (new_label, old_label) in key_map:
