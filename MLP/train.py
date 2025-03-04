@@ -1,27 +1,14 @@
 import time
 
-import pandas as pd
-import numpy as np
-import torch
-from torch.utils.data import DataLoader, Dataset
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, r2_score
-from torch_geometric.data import Data
 from tqdm import tqdm
 
-from MLP.data_loader.data_loader import FractureDataset, FractureDataLoader
-from MLP.helper_functions import append_impulse_to_data, get_screenshot_polyscope
-from MLP.metrics import minimum_chamfer_distance, calculate_n_minimum_chamfer_values, get_model_output_from_index, \
-    contour_chamfer_distance
-from MLP.model import MLP
+from MLP.data_loader.data_loader import FractureDataLoader
+from MLP.helper_functions import get_screenshot_polyscope
+from MLP.metrics import calculate_n_minimum_chamfer_values, get_model_output_from_index
 from MLP.model.loss import *
-from MLP.model.MLP import MLP, CNN, MLP_constant
-from MLP.region_growing import RegionGrowing
-from MLP.test import visualize
+from MLP.model.MLP import MLP_constant
 from MLP.visualize import load_mesh_from_file
 from torch.utils.tensorboard import SummaryWriter
-from MLP.model.deltanet_regression import DeltaNetRegression
 
 
 # def do_visualize_quick(mesh, dataset, model):
@@ -176,7 +163,7 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
         testing_loss = run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
 
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
-        edge_chamfer_value, num_non_fractures = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=10, edge=True)
+        edge_chamfer_value, num_non_fractures = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=2, edge=True)
 
         tensorboard_writer.add_scalars("Loss", {f"Train_MLP_{complexity}": training_loss  , f"Test_MLP_{complexity}": testing_loss }, epoch)
 
@@ -199,7 +186,7 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
 
 
         # # print(f'Finished Epoch {epoch + 1}')
-        # save_checkpoint(epoch, model, optimizer, "checkpoints", train_dataset, mesh_path)
+        save_checkpoint(epoch, model, optimizer, "checkpoints", train_dataset, mesh_path)
 
     print("Training Finished")
     return model

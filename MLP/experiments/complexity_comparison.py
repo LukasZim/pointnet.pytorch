@@ -5,7 +5,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch_geometric.loader import DataLoader
 from torch_geometric.transforms import Compose, GenerateMeshNormals
 
-from MLP.metrics import calculate_n_minimum_chamfer_values
+from MLP.metrics import calculate_n_minimum_chamfer_values, n_chamfer_values_deltaconv
 from MLP.model.MLP import MLP_constant
 from MLP.model.deltanet_regression import DeltaNetRegression
 from MLP.model.loss import custom_loss
@@ -25,11 +25,11 @@ def create_MLP_model(complexity):
 # create a function that takes complexity as input
 # and outputs a DeltaConv model of that complexity
 def create_DeltaConv_model(complexity):
-    return DeltaNetRegression(9, complexity * [128], complexity, embedding_size=1024, num_neighbors=20, grad_regularizer=0.001, grad_kernel_width=1)
+    return DeltaNetRegression(9, complexity * [128], 2, embedding_size=1024, num_neighbors=20, grad_regularizer=0.001, grad_kernel_width=1)
 
 if __name__ == '__main__':
     # set some global variables
-    max_epochs = 2
+    max_epochs = 50
 
     # define the datasets for MLP
     path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/"
@@ -76,16 +76,31 @@ if __name__ == '__main__':
         test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
 
 
-
+    chamfer_loader = DataLoader(
+        validation_dataset, batch_size=1, shuffle=False, num_workers=num_workers, drop_last=False
+    )
 
 
     tensorboard_writer = SummaryWriter(log_dir=f"runs/experiment_complexity_{time.strftime('%Y%m%d-%H%M%S')}")
     csv_filename = f'complexity_comparison_{time.strftime("%Y%m%d-%H%M%S")}.csv'
     # create a loop that loops over complexity values in a range
-    for complexity in range(1, 11):
+    for complexity in range(1, 8):
+        print("CURRENT COMPLEXITY: ", complexity)
+        print("Start Deltaconv training")
+        delta_conv_model = create_DeltaConv_model(complexity)
+        trained_deltaconv_model = train_deltaconv(writer=tensorboard_writer, epochs= max_epochs, model=delta_conv_model, train_loader=train_loader, test_loader=test_loader, validation_loader=validation_loader, complexity=complexity,
+                        chamfer_loader=chamfer_loader, validation_dataset=validation_dataset)
+
+
+
+        validation_loss_deltaconv = evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
+        edge_chamfer_value_deltaconv, num_non_fractures_deltaconv = n_chamfer_values_deltaconv(chamfer_loader,
+                                                                                   trained_deltaconv_model,
+                                                                                   num_chamfer_values=100, edge=True)
 
         # call the training of the MLP
         # and output the best performing model on the testing set
+        print("start MLP training")
         mlp_model = create_MLP_model(complexity)
 
         trained_mlp_model = train_model(max_epochs, complexity, mlp_model, tensorboard_writer=tensorboard_writer, mesh=mesh,
@@ -93,40 +108,36 @@ if __name__ == '__main__':
                     test_dataset=test_dataset_mlp)
 
 
-        # TODO: call the training of the DeltaConv
-        delta_conv_model = create_DeltaConv_model(complexity)
-        # and output the best performing model on the testing set
-        trained_deltaconv_model = train_deltaconv(writer=tensorboard_writer, epochs= max_epochs, model=delta_conv_model, train_loader=train_loader, test_loader=test_loader, validation_loader=validation_loader,
-                        )
 
+        print("start evaluation")
         # loop over the validation set
         # and calculate the loss for both models
         validation_loss_mlp = run_epoch(trained_mlp_model, validate_dataloader_mlp, optimizer=None, train=False)
-        # edge_chamfer_value, num_non_fractures = calculate_n_minimum_chamfer_values(validate_dataset_mlp, trained_mlp_model, mesh, num_chamfer_values=100, edge=True)
+        edge_chamfer_value, num_non_fractures = calculate_n_minimum_chamfer_values(validate_dataset_mlp, trained_mlp_model, mesh, num_chamfer_values=100, edge=True)
 
-        validation_loss_deltaconv = evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
-        # edge_chamfer_value_deltaconv, num_non_fractures_deltaconv = calculate_n_minimum_chamfer_values(validation_loader,
-        #                                                                            trained_deltaconv_model, mesh,
-        #                                                                            num_chamfer_values=100, edge=True)
 
-        #TODO: store these values in a PD object
 
         # also store in tensorboard (optional)
         tensorboard_writer.add_scalars(f'Validation_loss', {"MLP": validation_loss_mlp, "DeltaConv": validation_loss_deltaconv,}, complexity)
 
-        # tensorboard_writer.add_scalars(f'Validation_chamfer', {"MLP": edge_chamfer_value, 'DeltaConv': edge_chamfer_value_deltaconv}, complexity)
-        #
-        # tensorboard_writer.add_scalars(f'Validation_chamfer_non_fractures', {"MLP": num_non_fractures, 'DeltaConv': num_non_fractures_deltaconv}, complexity)
+        tensorboard_writer.add_scalars(f'Validation_chamfer', {"MLP": edge_chamfer_value, 'DeltaConv': edge_chamfer_value_deltaconv}, complexity)
+
+        tensorboard_writer.add_scalars(f'Validation_chamfer_non_fractures', {"MLP": num_non_fractures, 'DeltaConv': num_non_fractures_deltaconv}, complexity)
 
 
         data = {
             'complexity': complexity,
             'mlp_loss': validation_loss_mlp,
-            # 'mlp_edge_chamfer_value': edge_chamfer_value,
-            # 'mlp_num_non_fractures': num_non_fractures
+            'mlp_edge_chamfer_value': edge_chamfer_value,
+            'mlp_num_non_fractures': num_non_fractures,
+
+            'deltaconv_loss': validation_loss_deltaconv,
+            'deltaconv_edge_chamfer_value': edge_chamfer_value_deltaconv,
+            'deltaconv_num_non_fractures': num_non_fractures_deltaconv,
         }
         df = pd.DataFrame([data])
         df.to_csv(csv_filename, mode='a', header = (complexity ==1), index=False)
+        print("done with complexity:", complexity)
     # write the PD object to file, so I can later use it to plot
     # for this use an appropriate name
 

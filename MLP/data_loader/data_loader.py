@@ -196,6 +196,9 @@ class FractureGeomDataset(InMemoryDataset):
         # return list of file names containing training and test data
 
 
+    def get_GT(self, index):
+        return 1
+
     def process(self):
         print("started processing dataset")
 
@@ -241,8 +244,8 @@ class FractureGeomDataset(InMemoryDataset):
                 data_list_validate.append(data)
             # visualize_mesh_from_data_obj(data)
         torch.save(self.collate(data_list), self.processed_paths[0])
-        torch.save(self.collate(data_list), self.processed_paths[1]) #TODO: REVERT THIS ONE
-        torch.save(self.collate(data_list_validate), self.processed_paths[2])
+        torch.save(self.collate(data_list_validate), self.processed_paths[1])
+        torch.save(self.collate(data_list_test), self.processed_paths[2])
 
         # save data_list to disk, after applying self.collate to the data_list
 

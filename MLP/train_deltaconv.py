@@ -11,6 +11,7 @@ from torch_geometric.transforms import Compose, GenerateMeshNormals
 from torch_geometric.loader import DataLoader
 from tqdm import tqdm
 
+from MLP.metrics import n_chamfer_values_deltaconv
 from MLP.model.deltanet_regression import DeltaNetRegression
 from MLP.model.loss import l2_loss, l1_loss, custom_loss
 import deltaconv.transforms as T
@@ -18,8 +19,10 @@ from deltaconv.models import DeltaNetSegmentation
 
 from deltaconv.experiments.utils import calc_loss
 
+from MLP.visualize import create_mesh_from_faces_and_vertices
 
-def train(args, writer, train_loader, test_loader, validation_loader, model=None):
+
+def train(args, writer, train_loader, test_loader, validation_loader, validation_dataset, chamfer_loader, model=None, complexity=0):
     # Data preparation
     # ----------------
 
@@ -62,15 +65,25 @@ def train(args, writer, train_loader, test_loader, validation_loader, model=None
 
         best_validation = 0
         best_validation_test_score = 0
-        for epoch in tqdm(range(1, args.epochs + 1)):
+        for epoch in tqdm(range(0, args.epochs )):
             training_loss = train_epoch(epoch, model, args.device, optimizer, train_loader, writer, loss_function)
-            validation_accuracy = evaluate(model, args.device, validation_loader, loss_function)
+            torch.cuda.empty_cache()
+            validation_accuracy = evaluate(model, args.device, validation_loader, loss_function, )
+            torch.cuda.empty_cache()
             writer.add_scalar('validation accuracy', validation_accuracy, epoch)
-            test_accuracy = evaluate(model, args.device, test_loader, loss_function)
+            test_accuracy = evaluate(model, args.device, test_loader, loss_function, )
             writer.add_scalar('test accuracy', test_accuracy, epoch)
-            writer.add_scalars("Loss comparison", {"Train": training_loss,
-                                                    "Test": validation_accuracy}, epoch)
+            writer.add_scalars("Loss", {f"train_DC_{complexity}": training_loss,
+                                                    f"Test_DC_{complexity}": validation_accuracy}, epoch)
 
+            chamfer_value, num_non_fractures = n_chamfer_values_deltaconv(chamfer_loader,
+                                       model,
+                                       num_chamfer_values=10, edge=True)
+
+            writer.add_scalar(f'DC_chamfer_{complexity}', chamfer_value, epoch)
+            writer.add_scalar(f'DC_non_fracture_{complexity}', num_non_fractures, epoch)
+
+            torch.cuda.empty_cache()
             if validation_accuracy > best_validation:
                 best_validation = validation_accuracy
                 best_validation_test_score = test_accuracy
@@ -78,7 +91,7 @@ def train(args, writer, train_loader, test_loader, validation_loader, model=None
             scheduler.step()
     else:
         model.load_state_dict(torch.load(args.checkpoint))
-        best_validation_test_score = evaluate(model, args.device, test_loader, loss_function)
+        best_validation_test_score = evaluate(model, args.device, test_loader, loss_function, )
 
     print("Test accuracy: {}".format(best_validation_test_score))
     # visualize_model_output(model, test_loader, args.device, test_dataset)
@@ -140,6 +153,8 @@ def train_epoch(epoch, model, device, optimizer, loader, writer, loss_function):
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
+        torch.cuda.empty_cache()
+        del data , out, loss
     writer.add_scalar('training loss',
                       np.mean(losses),
                       epoch)
@@ -152,6 +167,7 @@ def evaluate(model, device, loader, loss_function):
     """Evaluate the model for on each item in the loader."""
     model.eval()
     losses = []
+    # print("evaluata")
     for data in loader:
         data = data.to(device)
 
@@ -164,6 +180,11 @@ def evaluate(model, device, loader, loss_function):
         # print(data.x.grad)
         # np.mean(np.abs(data.x.grad.cpu().numpy()), axis=0)
         losses.append(loss.item())
+
+
+        torch.cuda.empty_cache()
+        del data , out, loss
+        torch.cuda.empty_cache()
     return np.mean(losses)
 
 
@@ -290,7 +311,7 @@ if __name__ == "__main__":
 
     train(args, writer, train_loader, test_loader, validation_loader)
 
-def train_deltaconv(writer, epochs, model, train_loader, test_loader, validation_loader, ):
+def train_deltaconv(writer, epochs, model, train_loader, test_loader, validation_loader, validation_dataset, chamfer_loader, complexity):
     # Parse arguments
     parser = argparse.ArgumentParser(description='DeltaNet Segmentation')
     # Optimization hyperparameters.
@@ -367,4 +388,4 @@ def train_deltaconv(writer, epochs, model, train_loader, test_loader, validation
 
     # Start training process
     torch.manual_seed(args.seed)
-    return train(args, writer, train_loader, test_loader, validation_loader, model=model)
+    return train(args, writer, train_loader, test_loader, validation_loader, validation_dataset, chamfer_loader, model=model, complexity=complexity)

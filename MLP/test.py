@@ -1,21 +1,18 @@
 import os
 import time
 from glob import glob
-import random
 
 import torch
 from sklearn.metrics import mean_squared_error, r2_score
-from sympy import minimum
 from torch.utils.tensorboard import SummaryWriter
 
 from MLP.data_loader.data_loader import FractureDataLoader
-from MLP.helper_functions import append_impulse_to_data
-from MLP.metrics import chamfer_distance, minimum_chamfer_distance
-from MLP.model.MLP import MLP,CNN
+from MLP.metrics import minimum_chamfer_distance
+from MLP.model.MLP import MLP
 import numpy as np
 
 from MLP.path import Path
-from MLP.region_growing import RegionGrowing
+from MLP.segmentation_approaches.region_growing import RegionGrowing
 from MLP.visualize import load_mesh_from_file
 
 
@@ -132,8 +129,8 @@ def visualize_UDF_polyscope(gradients, distances, GT_distances, mesh, model, par
     ps.screenshot("screenshots/screenshot_" + time.strftime("%Y%m%d-%H%M%S") + ".png", transparent_bg=True)
     ss = ps.screenshot_to_buffer(transparent_bg=False)
     ss3 = ss[:,:,:3]
-    tensorboard_writer.add_image("labelling", ss3, dataformats="HWC")
-    tensorboard_writer.close()
+    # tensorboard_writer.add_image("labelling", ss3, dataformats="HWC")
+    # tensorboard_writer.close()
     ps.show()
 
 

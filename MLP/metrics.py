@@ -1,11 +1,9 @@
-import time
-
 import numpy as np
 import torch
 from scipy.spatial import KDTree
 
-from MLP.helper_functions import append_impulse_to_data
-from MLP.region_growing import RegionGrowing
+from MLP.segmentation_approaches.region_growing import RegionGrowing
+from MLP.visualize import create_mesh_from_faces_and_vertices
 
 
 def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_chamfer_values=10, edge=False):
@@ -31,12 +29,58 @@ def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_chamfer_values=
     return np.mean(chamfer_values), num_non_fractures
 
 
+def n_chamfer_values_deltaconv(loader, model, num_chamfer_values=10, edge=False):
+    chamfer_values = []
+    num_non_fractures = 0
+    index = 0
+    for data in loader:
+        if index >= num_chamfer_values:
+            break
+        index += 1
+
+        mesh = create_mesh_from_faces_and_vertices(data.face.T, data.pos)
+        labels, predicted_udf = get_model_output_DC(data, model, mesh)
+
+        gt_labels = data.gt_label.cpu().numpy()
+        if edge:
+            chamfer = contour_chamfer_distance(np.asarray(mesh.vertices), np.asarray(mesh.triangles), labels, gt_labels)
+        else:
+            chamfer, _ = minimum_chamfer_distance(np.asarray(mesh.vertices), labels, gt_labels)
+        if chamfer == float('inf'):
+            num_non_fractures += 1
+        else:
+            chamfer_values.append(chamfer)
+
+    if len(chamfer_values) == 0:
+        return float('inf'), num_non_fractures
+
+
+    return np.mean(chamfer_values), num_non_fractures
+
+
 def get_model_output(mesh, pcd, impulse, model, gt_udf):
     from MLP.train import run_model
     pcd = torch.from_numpy(pcd).float()
     impulse = torch.from_numpy(impulse).float()
     gt_udf = torch.from_numpy(gt_udf).float()
     outputs, _ = run_model(pcd, gt_udf, impulse, model,  train=False)
+
+    predicted_udf = np.array(outputs.squeeze().tolist())
+
+    region_growing = RegionGrowing(mesh, predicted_udf, gt_udf)
+    labels = region_growing.calculate_region_growing()
+    return labels, predicted_udf
+
+
+def get_model_output_DC(data, model, mesh):
+    data = data.to('cuda')
+
+    pcd = data.pos.cpu().numpy()
+    gt_udf = data.y.cpu().numpy()
+    impulse = data.impulse.cpu().numpy()
+
+
+    outputs = model(data).squeeze()
 
     predicted_udf = np.array(outputs.squeeze().tolist())
 
