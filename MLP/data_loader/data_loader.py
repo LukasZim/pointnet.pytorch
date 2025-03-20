@@ -100,6 +100,9 @@ class FractureDataset(Dataset):
 
         return pcd, udf, impulse, label_gt, label_edge
 
+    def get_GT_size(self):
+        return len(self.udf)
+
     def get_random_GT(self):
         index = random.randint(0, self.files_used - 1)
         return self.get_GT(index)
@@ -196,9 +199,6 @@ class FractureGeomDataset(InMemoryDataset):
         # return list of file names containing training and test data
 
 
-    def get_GT(self, index):
-        return 1
-
     def process(self):
         print("started processing dataset")
 
@@ -223,6 +223,7 @@ class FractureGeomDataset(InMemoryDataset):
             # data.face = torch.tensor([[0],[1],[2]])
             udf = df["distance"].values
             label_gt = df["label"].values
+            label_edge = df['edge_labels'].values
 
             df = pd.read_pickle(self.impulse[file_index])
             impulse = df.values[0]
@@ -230,6 +231,7 @@ class FractureGeomDataset(InMemoryDataset):
             data.y = torch.tensor(udf, dtype=torch.float32)
             data.gt_label = torch.tensor(label_gt, dtype=torch.int64)
             data.impulse = torch.tensor(impulse, dtype=torch.float32)
+            data.edge_label = torch.tensor(label_edge, dtype=torch.int64)
             # data.x = torch.tensor(impulse, dtype=torch.float32).repeat(udf.shape[0], 1)
             data.x = torch.cat((data.pos, torch.tensor(impulse, dtype=torch.float32).repeat(udf.shape[0], 1)), dim=1)
             if self.pre_filter is not None and not self.pre_filter(data):

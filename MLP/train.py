@@ -75,6 +75,7 @@ def run_model(points, udf_values, impulses, used_model, optimizer=None, train=Fa
 
 def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=True):
     training_loss = 0.0
+    losses = []
 
     if train:
         model.train()
@@ -93,6 +94,7 @@ def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=T
                 optimizer.step()
 
             training_loss += loss.item()
+            losses.append(loss.item())
 
             if i == 0:
                 print(f"loss after mini-batch %5d: %.3f" % (i + 1, loss / 50))
@@ -102,7 +104,7 @@ def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=T
 
             # print(i)
 
-    return training_loss / size
+    return training_loss / size, losses
 
 if __name__ == '__main__':
     tensorboard_writer = SummaryWriter(log_dir=f"runs/MLP_{time.strftime('%Y%m%d-%H%M%S')}")
@@ -122,11 +124,11 @@ if __name__ == '__main__':
 
         mesh = load_mesh_from_file(mesh_path)
 
-        training_loss = run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
-        testing_loss = run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
+        training_loss, _ = run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
+        testing_loss, _ = run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
 
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
-        # edge_chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, edge=True)
+        edge_chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, edge=True)
 
         tensorboard_writer.add_scalars("Loss", {"Train": training_loss  , "Test": testing_loss}, epoch)
         time_start = time.time()
@@ -154,16 +156,16 @@ if __name__ == '__main__':
 
     # visualize()
 
-def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_dataloader, train_dataset, test_dataloader, test_dataset, loss_function=custom_loss):
+def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_dataloader, train_dataset, test_dataloader, test_dataset, mesh_path, loss_function=custom_loss):
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
     for epoch in tqdm(range(0, num_epochs)):
-        training_loss = run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
-        testing_loss = run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
+        training_loss , _ = run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
+        testing_loss , _ = run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
 
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
-        edge_chamfer_value, num_non_fractures = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=2, edge=True)
+        edge_chamfer_value, num_non_fractures, _ = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=10, edge=True)
 
         tensorboard_writer.add_scalars("Loss", {f"Train_MLP_{complexity}": training_loss  , f"Test_MLP_{complexity}": testing_loss }, epoch)
 
@@ -186,7 +188,7 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
 
 
         # # print(f'Finished Epoch {epoch + 1}')
-        save_checkpoint(epoch, model, optimizer, "checkpoints", train_dataset, mesh_path)
+        # save_checkpoint(epoch, model, optimizer, "checkpoints", train_dataset, mesh_path)
 
     print("Training Finished")
     return model

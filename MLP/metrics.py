@@ -1,7 +1,10 @@
 import numpy as np
 import torch
 from scipy.spatial import KDTree
+from tqdm import tqdm
 
+from MLP.segmentation_approaches.felzenszwalb.felzenszwalb import FelzensZwalbSegmentation
+from MLP.segmentation_approaches.minimum_cut import minimum_cut_segmentation
 from MLP.segmentation_approaches.region_growing import RegionGrowing
 from MLP.visualize import create_mesh_from_faces_and_vertices
 
@@ -10,7 +13,7 @@ def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_chamfer_values=
     chamfer_values = []
     num_non_fractures = 0
 
-    for i in range(num_chamfer_values):
+    for i in tqdm(range(num_chamfer_values)):
         pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(i)
         labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
         if edge:
@@ -26,14 +29,14 @@ def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_chamfer_values=
         return -1, num_non_fractures
 
 
-    return np.mean(chamfer_values), num_non_fractures
+    return np.mean(chamfer_values), num_non_fractures, chamfer_values
 
 
 def n_chamfer_values_deltaconv(loader, model, num_chamfer_values=10, edge=False):
     chamfer_values = []
     num_non_fractures = 0
     index = 0
-    for data in loader:
+    for data in tqdm(loader):
         if index >= num_chamfer_values:
             break
         index += 1
@@ -52,10 +55,10 @@ def n_chamfer_values_deltaconv(loader, model, num_chamfer_values=10, edge=False)
             chamfer_values.append(chamfer)
 
     if len(chamfer_values) == 0:
-        return float('inf'), num_non_fractures
+        return float('inf'), num_non_fractures, []
 
 
-    return np.mean(chamfer_values), num_non_fractures
+    return np.mean(chamfer_values), num_non_fractures, chamfer_values
 
 
 def get_model_output(mesh, pcd, impulse, model, gt_udf):
@@ -69,6 +72,14 @@ def get_model_output(mesh, pcd, impulse, model, gt_udf):
 
     region_growing = RegionGrowing(mesh, predicted_udf, gt_udf)
     labels = region_growing.calculate_region_growing()
+
+
+
+
+
+
+    # minimum_cut = minimum_cut_segmentation(mesh, predicted_udf, gt_udf)
+    # labels = minimum_cut.calculate_minimum_cut()
     return labels, predicted_udf
 
 

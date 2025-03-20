@@ -68,15 +68,15 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
         for epoch in tqdm(range(0, args.epochs )):
             training_loss = train_epoch(epoch, model, args.device, optimizer, train_loader, writer, loss_function)
             torch.cuda.empty_cache()
-            validation_accuracy = evaluate(model, args.device, validation_loader, loss_function, )
+            validation_accuracy = np.mean(evaluate(model, args.device, validation_loader, loss_function, ))
             torch.cuda.empty_cache()
             writer.add_scalar('validation accuracy', validation_accuracy, epoch)
-            test_accuracy = evaluate(model, args.device, test_loader, loss_function, )
+            test_accuracy = np.mean(evaluate(model, args.device, test_loader, loss_function, ))
             writer.add_scalar('test accuracy', test_accuracy, epoch)
             writer.add_scalars("Loss", {f"train_DC_{complexity}": training_loss,
                                                     f"Test_DC_{complexity}": validation_accuracy}, epoch)
 
-            chamfer_value, num_non_fractures = n_chamfer_values_deltaconv(chamfer_loader,
+            chamfer_value, num_non_fractures, _ = n_chamfer_values_deltaconv(chamfer_loader,
                                        model,
                                        num_chamfer_values=10, edge=True)
 
@@ -91,7 +91,7 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
             scheduler.step()
     else:
         model.load_state_dict(torch.load(args.checkpoint))
-        best_validation_test_score = evaluate(model, args.device, test_loader, loss_function, )
+        best_validation_test_score = np.mean(evaluate(model, args.device, test_loader, loss_function, ))
 
     print("Test accuracy: {}".format(best_validation_test_score))
     # visualize_model_output(model, test_loader, args.device, test_dataset)
@@ -185,7 +185,7 @@ def evaluate(model, device, loader, loss_function):
         torch.cuda.empty_cache()
         del data , out, loss
         torch.cuda.empty_cache()
-    return np.mean(losses)
+    return losses
 
 
 
