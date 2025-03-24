@@ -13,7 +13,7 @@ def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_chamfer_values=
     chamfer_values = []
     num_non_fractures = 0
 
-    for i in tqdm(range(num_chamfer_values)):
+    for i in tqdm(range(max(num_chamfer_values, dataset.get_GT_size()))):
         pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(i)
         labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
         if edge:
@@ -36,7 +36,7 @@ def n_chamfer_values_deltaconv(loader, model, num_chamfer_values=10, edge=False)
     chamfer_values = []
     num_non_fractures = 0
     index = 0
-    for data in tqdm(loader):
+    for data in (loader):
         if index >= num_chamfer_values:
             break
         index += 1

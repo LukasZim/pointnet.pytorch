@@ -60,7 +60,7 @@ class FelzensZwalbSegmentation:
             val = u.find(i)
             vals.append(val)
 
-        print(np.unique(vals, return_counts=True))
+        # print(np.unique(vals, return_counts=True))
         return np.array(vals)
 
     def calculate_segmentation(self, ):

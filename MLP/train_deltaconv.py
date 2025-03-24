@@ -42,8 +42,8 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
     if model is None:
         model = DeltaNetRegression(
             in_channels=9,   # There are eight segmentation classes
-            # conv_channels=[128] * 5,  # We use 8 convolution layers, each with 128 channels
-            conv_channels=[32]*4,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
+            conv_channels=[128] * 5,  # We use 8 convolution layers, each with 128 channels
+            # conv_channels=[32]*4,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
             mlp_depth=3,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
             embedding_size=512,  # Embed the features in 512 dimensions after convolutions
             num_neighbors=args.k,  # The number of neighbors is given as an argument
@@ -188,6 +188,35 @@ def evaluate(model, device, loader, loss_function):
     return losses
 
 
+def evaluate_with_time(model, device, loader, loss_function):
+    """Evaluate the model for on each item in the loader."""
+    model.eval()
+    losses = []
+    times = []
+    # print("evaluata")
+    for data in loader:
+        data = data.to(device)
+
+        # data.x = data.x.clone().detach().requires_grad_(True)
+        start_model = time.time()
+        out = model(data)
+        out = out.squeeze()
+        duration = time.time() - start_model
+
+        loss = loss_function(out, data.y)
+        # loss.backward()
+        # print(data.x.grad)
+        # np.mean(np.abs(data.x.grad.cpu().numpy()), axis=0)
+        losses.append(loss.item())
+        times.append(duration)
+
+
+        torch.cuda.empty_cache()
+        del data , out, loss
+        torch.cuda.empty_cache()
+    return losses, times
+
+
 
 
 
@@ -199,7 +228,7 @@ if __name__ == "__main__":
     # Optimization hyperparameters.
     parser.add_argument('--batch_size', type=int, default=6, metavar='batch_size',
                         help='Size of batch (default: 8)')
-    parser.add_argument('--epochs', type=int, default=50, metavar='num_epochs',
+    parser.add_argument('--epochs', type=int, default=300, metavar='num_epochs',
                         help='Number of episode to train (default: 50)')
     parser.add_argument('--num_points', type=int, default=1024, metavar='N',
                         help='Number of points to use (default: 1024)')
@@ -305,11 +334,13 @@ if __name__ == "__main__":
         validation_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
     test_loader = DataLoader(
         test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers, drop_last=False)
+    chamfer_loader = DataLoader(
+        validation_dataset, batch_size=1, shuffle=False, num_workers=num_workers, drop_last=False)
 
 
 
 
-    train(args, writer, train_loader, test_loader, validation_loader)
+    train(args, writer, train_loader, test_loader, validation_loader, validation_dataset, chamfer_loader)
 
 def train_deltaconv(writer, epochs, model, train_loader, test_loader, validation_loader, validation_dataset, chamfer_loader, complexity):
     # Parse arguments

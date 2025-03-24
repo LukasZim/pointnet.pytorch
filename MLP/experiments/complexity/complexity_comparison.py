@@ -11,7 +11,7 @@ from MLP.model.MLP import MLP_constant
 from MLP.model.deltanet_regression import DeltaNetRegression
 from MLP.model.loss import custom_loss
 from MLP.train import train_model, run_epoch
-from MLP.train_deltaconv import train_deltaconv, evaluate
+from MLP.train_deltaconv import train_deltaconv, evaluate, evaluate_with_time
 from MLP.visualize import load_mesh_from_file
 import deltaconv.transforms as T
 
@@ -94,11 +94,14 @@ if __name__ == '__main__':
                         chamfer_loader=chamfer_loader, validation_dataset=validation_dataset)
 
 
-
-        deltaconv_losses = evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
+        time_start = time.time()
+        deltaconv_losses, deltaconv_durations = evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
+        deltaconv_evaluation_time = time.time() - time_start
+        time_start = time.time()
         edge_chamfer_value_deltaconv, num_non_fractures_deltaconv, edge_chamfer_values_list_deltaconv = n_chamfer_values_deltaconv(chamfer_loader,
                                                                                    trained_deltaconv_model,
-                                                                                   num_chamfer_values=100, edge=True)
+                                                                                   num_chamfer_values=100000, edge=True)
+        deltaconv_chamfer_time = time.time() - time_start
 
         validation_loss_deltaconv = np.mean(deltaconv_losses)
         validation_variance_deltaconv = np.var(deltaconv_losses)
@@ -130,8 +133,12 @@ if __name__ == '__main__':
         print("start evaluation")
         # loop over the validation set
         # and calculate the loss for both models
+        time_start = time.time()
         _, mlp_losses = run_epoch(trained_mlp_model, validate_dataloader_mlp, optimizer=None, train=False)
-        edge_chamfer_value, num_non_fractures, edge_chamfer_values_list = calculate_n_minimum_chamfer_values(validate_dataset_mlp, trained_mlp_model, mesh, num_chamfer_values=100, edge=True)
+        MLP_evaluation_time = time.time() - time_start
+        time_start = time.time()
+        edge_chamfer_value, num_non_fractures, edge_chamfer_values_list = calculate_n_minimum_chamfer_values(validate_dataset_mlp, trained_mlp_model, mesh, num_chamfer_values=100000, edge=True)
+        MLP_chamfer_time = time.time() - time_start
 
 
         validation_loss_mlp = np.mean(mlp_losses)
@@ -163,6 +170,9 @@ if __name__ == '__main__':
             'mlp_validation_median': validation_median_mlp,
             'mlp_validation_min': validation_min_mlp,
             'mlp_validation_max': validation_max_mlp,
+            'MLP_evaluation_time': MLP_evaluation_time,
+            'MLP_chamfer_time': MLP_chamfer_time,
+            'MLP_evaluation_size': validate_dataset_mlp.get_GT_size(),
 
             'mlp_edge_chamfer_value': edge_chamfer_value,
             'mlp_num_non_fractures': num_non_fractures,
@@ -177,6 +187,9 @@ if __name__ == '__main__':
             'deltaconv_validation_median': validation_median_deltaconv,
             'deltaconv_validation_min': validation_min_deltaconv,
             'deltaconv_validation_max': validation_max_deltaconv,
+            'deltaconv_evaluation_time': deltaconv_evaluation_time,
+            'deltaconv_chamfer_time': deltaconv_chamfer_time,
+            'deltaconv_chamfer_size': len(validation_dataset),
 
             'deltaconv_edge_chamfer_value': edge_chamfer_value_deltaconv,
             'deltaconv_num_non_fractures': num_non_fractures_deltaconv,
