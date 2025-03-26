@@ -19,7 +19,7 @@ from deltaconv.models import DeltaNetSegmentation
 
 from deltaconv.experiments.utils import calc_loss
 
-from MLP.visualize import create_mesh_from_faces_and_vertices
+from MLP.visualize import create_mesh_from_faces_and_vertices, load_mesh_from_file
 
 
 def train(args, writer, train_loader, test_loader, validation_loader, validation_dataset, chamfer_loader, model=None, complexity=0):
@@ -42,10 +42,10 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
     if model is None:
         model = DeltaNetRegression(
             in_channels=9,   # There are eight segmentation classes
-            conv_channels=[128] * 5,  # We use 8 convolution layers, each with 128 channels
+            conv_channels=[256] * 4,  # We use 8 convolution layers, each with 128 channels
             # conv_channels=[32]*4,                   # This also works with fewer layers and channels, e.g., 6 layers and 32 channels
             mlp_depth=3,  # Each convolution uses MLPs with only one layer (i.e., perceptrons)
-            embedding_size=512,  # Embed the features in 512 dimensions after convolutions
+            embedding_size=1024,  # Embed the features in 512 dimensions after convolutions
             num_neighbors=args.k,  # The number of neighbors is given as an argument
             grad_regularizer=args.grad_regularizer,  # The regularizer value is given as an argument
             grad_kernel_width=args.grad_kernel,  # The kernel width is given as an argument
@@ -63,7 +63,7 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
         # Train the model
         # ---------------
 
-        best_validation = 0
+        best_validation = float('inf')
         best_validation_test_score = 0
         for epoch in tqdm(range(0, args.epochs )):
             training_loss = train_epoch(epoch, model, args.device, optimizer, train_loader, writer, loss_function)
@@ -84,11 +84,14 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
             writer.add_scalar(f'DC_non_fracture_{complexity}', num_non_fractures, epoch)
 
             torch.cuda.empty_cache()
-            if validation_accuracy > best_validation:
+            print("deltaconv validation and test accuracy: ", validation_accuracy, test_accuracy)
+            if validation_accuracy < best_validation:
                 best_validation = validation_accuracy
                 best_validation_test_score = test_accuracy
                 torch.save(model.state_dict(), osp.join(args.checkpoint_dir, 'best.pt'))
             scheduler.step()
+            # if epoch % 10 == 0:
+            #     visualize_model_output(model, test_loader, args.device, test_dataset)
     else:
         model.load_state_dict(torch.load(args.checkpoint))
         best_validation_test_score = np.mean(evaluate(model, args.device, test_loader, loss_function, ))
@@ -100,11 +103,22 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
 
 def visualize_model_output(model, loader, device, dataset):
     model.eval()
+    limit = 1
+    i = 0
+
+    mesh_path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets/bunny/bunny.obj"
+    mesh = load_mesh_from_file(mesh_path)
     for batch in loader:
+        if i >= limit:
+            break
+        i += 1
         data = batch
-        vertices =  data.pos.cpu().numpy()
-        faces = dataset.mesh_triangles
-        vertices = dataset.mesh_vertices
+        # vertices =  data.pos.cpu().numpy()
+        # faces = dataset.mesh_triangles
+        # vertices = dataset.mesh_vertices
+
+        faces = np.asarray(mesh.triangles)
+        vertices = np.asarray(mesh.vertices)
 
         out = model(data.to(device))
         for i in range(batch.num_graphs):
@@ -168,12 +182,20 @@ def evaluate(model, device, loader, loss_function):
     model.eval()
     losses = []
     # print("evaluata")
+    visualized = False
     for data in loader:
         data = data.to(device)
 
         # data.x = data.x.clone().detach().requires_grad_(True)
         out = model(data)
         out = out.squeeze()
+
+        if not visualized:
+            visualized = True
+
+            # visualize(mesh, out.detach().cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.y.cpu().numpy(), None )
+            # visualize(mesh, outputs.detach().cpu().numpy(), data.gt_label.cpu().numpy(), labels_region_growing,
+            #           labels_fzs, fzs_div_labels, data.y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy())
 
         loss = loss_function(out, data.y)
         # loss.backward()
@@ -232,13 +254,13 @@ if __name__ == "__main__":
                         help='Number of episode to train (default: 50)')
     parser.add_argument('--num_points', type=int, default=1024, metavar='N',
                         help='Number of points to use (default: 1024)')
-    parser.add_argument('--lr', type=float, default=0.005, metavar='LR',
+    parser.add_argument('--lr', type=float, default=0.002, metavar='LR',
                         help='Learning rate (default: 0.005)')
 
     # DeltaConv hyperparameters.
     parser.add_argument('--k', type=int, default=20, metavar='K',
                         help='Number of nearest neighbors to use (default: 20)')
-    parser.add_argument('--grad_kernel', type=float, default=1, metavar='h',
+    parser.add_argument('--grad_kernel', type=float, default=2, metavar='h',
                         help='Kernel size for WLS, as a factor of the average edge length (default: 1)')
     parser.add_argument('--grad_regularizer', type=float, default=0.001, metavar='lambda',
                         help='Regularizer lambda to use for WLS (default: 0.001)')

@@ -22,7 +22,7 @@ import deltaconv.transforms as T
 
 from tqdm import tqdm
 
-def visualize(mesh, outputs, gt_label, labels_region_growing, labels_fzs, fzs_div_labels, gt_udf, gradients):
+def visualize(mesh, outputs, gt_label, labels_region_growing, labels_fzs, fzs_div_labels, gt_udf, gradients, index, using_deltaconv):
     import polyscope as ps
 
     ps.set_window_size(1920, 1080)
@@ -60,10 +60,57 @@ def visualize(mesh, outputs, gt_label, labels_region_growing, labels_fzs, fzs_di
     ps.look_at((0., 0., 2.5), (0, 0, 0))
     ps.show()
 
+    # ps.screenshot(f"/home/lukasz/Documents/pointnet.pytorch/MLP/experiments/segmentation/output_images/{'MLP' if not using_deltaconv else 'DC'}_{index}.png")
+
+import polyscope as ps
+import os
+
+ps.set_window_size(1920, 1080)
+ps.init()
+
+def visualize_toggle(mesh, outputs, gt_label, labels_region_growing, labels_fzs, fzs_div_labels, gt_udf, gradients, index, using_deltaconv):
+
+
+    vertices = np.asarray(mesh.vertices)
+    faces = np.asarray(mesh.triangles)
+
+    ps.register_surface_mesh("UDF mesh", vertices, faces, smooth_shade=True)
+
+    # Dictionary of scalar quantities to visualize
+    scalar_quantities = {
+        "predicted": outputs,
+        "GT": gt_label,
+        "region": labels_region_growing,
+        "felzenzshalb": labels_fzs,
+        "felzenzshalb div": fzs_div_labels,
+        "gt udf": gt_udf
+    }
+
+    # Register scalar quantities but enable only one at a time for screenshots
+    for name, data in scalar_quantities.items():
+        ps.get_surface_mesh("UDF mesh").add_scalar_quantity(name, data, defined_on="vertices", enabled=True)
+
+        # Set the view
+        ps.look_at((0., 0., 2.5), (0, 0, 0))
+
+        # Define the output path
+        output_path = f"/home/lukasz/Documents/pointnet.pytorch/MLP/experiments/segmentation/output_images/{'MLP' if not using_deltaconv else 'DC'}_{index}_{name}.png"
+
+        # Take a screenshot
+        ps.screenshot(output_path)
+
+        # Disable the scalar quantity after screenshot to avoid overlap
+        # ps.get_surface_mesh("UDF mesh").remove_scalar_quantity(name)
+
+    # Add vector quantity (gradients) but don't enable by default
+    # ps.get_surface_mesh("UDF mesh").add_vector_quantity("gradients", gradients, enabled=False)
+    # ps.shutdown()
+    ps.remove_all_structures()
+
 
 def store(region_growing_list, region_growing_non_fractures, region_growing_time_list, fzs_list, fzs_non_fractures,
           fzs_time_list, fzs_div_list, fzs_div_non_fractures, fzs_div_time_list, predicted_udf, test_targets, label_gt,
-          gradients, using_deltaconv):
+          gradients, using_deltaconv, index):
     # region growing
     region_growing_time = time.time()
 
@@ -124,10 +171,21 @@ def store(region_growing_list, region_growing_non_fractures, region_growing_time
     else:
         fzs_div_list.append(fzs_div_chamfer)
     fzs_div_time_list.append(fzs_div_duration)
+    print(region_growing_chamfer, fzs_chamfer, fzs_div_chamfer)
     if using_deltaconv:
-        visualize(mesh, outputs.detach().cpu().numpy(), data.gt_label.cpu().numpy(), labels_region_growing, labels_fzs, fzs_div_labels, data.y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy())
+        visualize_toggle(mesh, outputs.detach().cpu().numpy(), data.gt_label.cpu().numpy(), labels_region_growing,
+                         labels_fzs, fzs_div_labels, data.y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy(),
+                         index, using_deltaconv)
+        # visualize(mesh, outputs.detach().cpu().numpy(), data.gt_label.cpu().numpy(), labels_region_growing,
+        #                  labels_fzs, fzs_div_labels, data.y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy(),
+        #                  index, using_deltaconv)
     else:
-        visualize(mesh, outputs.detach().cpu().numpy(), label_gt, labels_region_growing, labels_fzs, fzs_div_labels, y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy())
+        visualize_toggle(mesh, outputs.detach().cpu().numpy(), label_gt, labels_region_growing, labels_fzs,
+                         fzs_div_labels, y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy(), index,
+                         using_deltaconv)
+        # visualize(mesh, outputs.detach().cpu().numpy(), label_gt, labels_region_growing, labels_fzs,
+        #                  fzs_div_labels, y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy(), index,
+        #                  using_deltaconv)
 
     return region_growing_list, region_growing_non_fractures, region_growing_time_list, fzs_list, fzs_non_fractures, fzs_time_list, fzs_div_list, fzs_div_non_fractures, fzs_div_time_list
 
@@ -179,9 +237,12 @@ if __name__ == "__main__":
     MLP_model.load_state_dict(state['state_dict'])
 
     # load trained DC model
-    DC_path = "/home/lukasz/Documents/pointnet.pytorch/MLP/runs/shapeseg/21Mar25_02_35/checkpoints/best.pt"
+    # DC_path = "/home/lukasz/Documents/pointnet.pytorch/MLP/runs/shapeseg/21Mar25_02_35/checkpoints/best.pt"
+    DC_path = "/home/lukasz/Documents/pointnet.pytorch/MLP/runs/shapeseg/26Mar25_00_41/checkpoints/best.pt"
     state_dict = torch.load(DC_path)
-    DC_model = DeltaNetRegression(in_channels=9, conv_channels=[128] * 5, mlp_depth=3, embedding_size=512, num_neighbors=20, grad_regularizer=0.001, grad_kernel_width=1).to('cuda')
+    # DC_model = DeltaNetRegression(in_channels=9, conv_channels=[128] * 5, mlp_depth=3, embedding_size=512, num_neighbors=20, grad_regularizer=0.001, grad_kernel_width=1).to('cuda')
+    DC_model = DeltaNetRegression(in_channels=9, conv_channels=[256] * 4, mlp_depth=3, embedding_size=1024, num_neighbors=20, grad_regularizer=0.001, grad_kernel_width=2).to('cuda')
+
     DC_model.load_state_dict(state_dict)
 
     MLP_region_growing = []
@@ -222,7 +283,7 @@ if __name__ == "__main__":
             MLP_region_growing, MLP_region_growing_non_fractures, MLP_region_growing_time, MLP_fzs,
             MLP_fzs_non_fractures, MLP_fzs_time, MLP_fzs_div, MLP_fzs_div_non_fractures, MLP_fzs_div_time,
             predicted_udf, test_targets, label_gt,
-            gradients, False
+            gradients, False, i
         )
 
     # do same loop for DC
@@ -235,7 +296,7 @@ if __name__ == "__main__":
     DC_fzs_div = []
     DC_fzs_div_non_fractures = 0
     DC_fzs_div_time = []
-    for data in tqdm(validation_loader):
+    for index, data in enumerate(tqdm(validation_loader)):
         data = data.to('cuda')
         data.pos.requires_grad = True
         outputs = DC_model(data).squeeze()
@@ -254,8 +315,8 @@ if __name__ == "__main__":
 
         DC_region_growing, DC_region_growing_non_fractures, DC_region_growing_time, DC_fzs, DC_fzs_non_fractures, DC_fzs_time, DC_fzs_div, DC_fzs_div_non_fractures, DC_fzs_div_time = store(
             DC_region_growing, DC_region_growing_non_fractures, DC_region_growing_time, DC_fzs, DC_fzs_non_fractures,
-            DC_fzs_time, DC_fzs_div, DC_fzs_div_non_fractures, DC_fzs_div_time, predicted_udf, gt_udf, data.gt_label, gradients, True
-            )
+            DC_fzs_time, DC_fzs_div, DC_fzs_div_non_fractures, DC_fzs_div_time, predicted_udf, gt_udf, data.gt_label, gradients, True,
+            index)
 
 
 

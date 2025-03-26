@@ -33,8 +33,8 @@ if __name__ == '__main__':
     max_epochs = 50
 
     # define the datasets for MLP
-    path = "../datasets/bunny/"
-    mesh_path = "../datasets/bunny/bunny.obj"
+    path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets/bunny"
+    mesh_path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets/bunny/bunny.obj"
 
     from MLP.data_loader.data_loader import FractureDataLoader, FractureGeomDataset
     train_dataloader_mlp, train_dataset_mlp = FractureDataLoader(path, type="train")
@@ -95,7 +95,7 @@ if __name__ == '__main__':
 
 
         time_start = time.time()
-        deltaconv_losses, deltaconv_durations = evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
+        deltaconv_losses = evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
         deltaconv_evaluation_time = time.time() - time_start
         time_start = time.time()
         edge_chamfer_value_deltaconv, num_non_fractures_deltaconv, edge_chamfer_values_list_deltaconv = n_chamfer_values_deltaconv(chamfer_loader,
