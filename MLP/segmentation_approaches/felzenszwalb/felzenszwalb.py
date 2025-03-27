@@ -44,7 +44,9 @@ class FelzensZwalbSegmentation:
         for u, v, data in nxg.edges(data=True):
             edges[num, 0] = u
             edges[num, 1] = v
-            edges[num, 2] = math.pow(10 * (np.max(self.predicted_udf) - data['udf']), 10)
+            # edges[num, 2] = math.pow(10 * (np.max(self.predicted_udf) - data['udf']), 10)
+            edges[num, 2] = data['udf']
+            # edges[num, 2] = np.max(self.predicted_udf) - data['udf']
             num += 1
 
 
@@ -63,8 +65,7 @@ class FelzensZwalbSegmentation:
         # print(np.unique(vals, return_counts=True))
         return np.array(vals)
 
-    def calculate_segmentation(self, ):
-        pass
+
 
     def create_graph(self):
         G = nx.Graph()

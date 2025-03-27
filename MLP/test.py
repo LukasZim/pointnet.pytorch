@@ -198,9 +198,9 @@ def visualize():
     # labels = segment_UDF(mesh, predicted_udf, test_targets)
     region_growing_time = time.time()
     div = DivergenceSegmentation(mesh, predicted_udf, test_targets, gradients[:,:3])
-    labels = div.calculate_divergence()
-    fzs = FelzensZwalbSegmentation(mesh, labels, test_targets)
-    labels = fzs.segment(0, 10)
+    labels_div = div.calculate_divergence()
+    fzs = FelzensZwalbSegmentation(mesh, np.abs(labels_div), test_targets)
+    labels = fzs.segment(500, 20)
     # region_growing = RegionGrowing(mesh, predicted_udf, test_targets)
     # labels = region_growing.calculate_region_growing()
     print("region growing duration: ", time.time() - region_growing_time)
@@ -210,11 +210,12 @@ def visualize():
     print("chamfer duration: ", time.time() - chamfer_time)
     print('chamfer distance =', chamfer)
     print("champfer key mapping", key_map)
+    print(np.max(labels_div))
     # duration = time.time() - time_start
     # print("duration:",duration)
     # labels = np.array([remap_label(label, key_map) for label in labels])
 
-    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, test_targets, mesh, model, labels, impulse, label_gt, tensorboard_writer)
+    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, labels_div, mesh, model, labels, impulse, label_gt, tensorboard_writer)
 
 def remap_label(label, key_map):
     for (new_label, old_label) in key_map:

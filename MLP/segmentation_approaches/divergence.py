@@ -20,7 +20,10 @@ class DivergenceSegmentation:
             pos_i = np.array(self.vertices[i])
             F_i = np.array(self.gradients[i])
 
+
+            num_neighbours = 0
             for j in G.neighbors(i):
+                num_neighbours += 1
                 pos_j = np.array(self.vertices[j])
                 F_j = np.array(self.gradients[j])
 
@@ -31,7 +34,9 @@ class DivergenceSegmentation:
                     flux = (F_j - F_i) @ unit_vector  # Dot product for flow change
                     div += flux / distance  # Normalize by distance
 
+            div = div / num_neighbours
             divergence.append(div if div > 0 else 0)
+            # divergence.append(div)
 
         return np.array(divergence)
 
