@@ -1,5 +1,6 @@
 import time
 
+import numpy as np
 from tqdm import tqdm
 
 from MLP.data_loader.data_loader import FractureDataLoader
@@ -64,7 +65,7 @@ def run_model(points, udf_values, impulses, used_model, optimizer=None, train=Fa
     if train:
         optimizer.zero_grad()
 
-    points_with_impulses = torch.cat((points, impulses.unsqueeze(0).repeat(points.size(0), 1)), dim=1).float()
+    points_with_impulses = torch.cat((points, impulses.unsqueeze(0).repeat(points.size(0), 1)), dim=1).float().to('cuda')
     if not train:
         points_with_impulses.requires_grad = True
 
@@ -82,12 +83,20 @@ def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=T
     else:
         model.eval()
     size = 0
-    for i, data in enumerate(dataloader):
+    durations = []
+    for i, data in (enumerate(dataloader)):
         [points, udf_values, impulses, gt_labels, label_edges] = data
+        points = points.to('cuda')
+        udf_values = udf_values.to('cuda')
+        impulses = impulses.to('cuda')
+        gt_labels = gt_labels.to('cuda')
+        label_edges = label_edges.to('cuda')
+        dur = []
         for index, (coordinates, udf_value, impulse, gt_label, label_edge) in enumerate(zip(points, udf_values, impulses, gt_labels, label_edges)):
             size += 1
-
+            time_start = time.time()
             model_output, _ = run_model(coordinates, udf_value, impulse, model, optimizer=optimizer, train=train)
+            dur.append(time.time() - time_start)
             loss = loss_function(model_output, udf_value)
             if train:
                 loss.backward()
@@ -95,7 +104,6 @@ def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=T
 
             training_loss += loss.item()
             losses.append(loss.item())
-
             if i == 0:
                 print(f"loss after mini-batch %5d: %.3f" % (i + 1, loss / 50))
                 # if index ==0 and epoch % 50 == 0:
@@ -103,18 +111,19 @@ def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=T
                 #         do_visualize_quick(mesh, dataset, model)
 
             # print(i)
+        durations.append(np.sum(dur))
 
-    return training_loss / size, losses
+    return training_loss / size, losses, np.mean(durations)
 
 if __name__ == '__main__':
     tensorboard_writer = SummaryWriter(log_dir=f"runs/MLP_{time.strftime('%Y%m%d-%H%M%S')}")
 
-    path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/"
-    mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/bunny.obj"
+    path = "/home/lukasz/Documents/thesis_pointcloud/datasets/chair"
+    mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/chair/chair.obj"
 
     train_dataloader, train_dataset = FractureDataLoader(path, type="train")
     test_dataloader, test_dataset = FractureDataLoader(path, type="test")
-    model = MLP_constant(9, 4, 256)
+    model = MLP_constant(9, 4, 256).to("cuda")
 
     loss_function = custom_loss
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
@@ -124,8 +133,8 @@ if __name__ == '__main__':
 
         mesh = load_mesh_from_file(mesh_path)
 
-        training_loss, _ = run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
-        testing_loss, _ = run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
+        training_loss, _ , _= run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
+        testing_loss, _ , _= run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
 
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
         edge_chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, edge=True)
@@ -161,8 +170,8 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
     for epoch in tqdm(range(0, num_epochs)):
-        training_loss , _ = run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
-        testing_loss , _ = run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
+        training_loss , _ , _= run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
+        testing_loss , _ , _= run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
 
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
         edge_chamfer_value, num_non_fractures, _ = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=10, edge=True)

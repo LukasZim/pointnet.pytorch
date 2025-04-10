@@ -26,13 +26,13 @@ def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_chamfer_values=
             chamfer_values.append(chamfer)
 
     if len(chamfer_values) == 0:
-        return -1, num_non_fractures
+        return -1, num_non_fractures, []
 
 
     return np.mean(chamfer_values), num_non_fractures, chamfer_values
 
 
-def n_chamfer_values_deltaconv(loader, model, num_chamfer_values=10, edge=False):
+def n_chamfer_values_deltaconv(loader, model, num_chamfer_values=10, edge=False, visualize=False):
     chamfer_values = []
     num_non_fractures = 0
     index = 0
@@ -42,7 +42,8 @@ def n_chamfer_values_deltaconv(loader, model, num_chamfer_values=10, edge=False)
         index += 1
 
         mesh = create_mesh_from_faces_and_vertices(data.face.T, data.pos)
-        labels, predicted_udf = get_model_output_DC(data, model, mesh)
+        labels, predicted_udf = get_model_output_DC(data, model, mesh, visualize)
+
 
         gt_labels = data.gt_label.cpu().numpy()
         if edge:
@@ -83,7 +84,7 @@ def get_model_output(mesh, pcd, impulse, model, gt_udf):
     return labels, predicted_udf
 
 
-def get_model_output_DC(data, model, mesh):
+def get_model_output_DC(data, model, mesh, show=False):
     data = data.to('cuda')
 
     pcd = data.pos.cpu().numpy()
@@ -97,6 +98,12 @@ def get_model_output_DC(data, model, mesh):
 
     region_growing = RegionGrowing(mesh, predicted_udf, gt_udf)
     labels = region_growing.calculate_region_growing()
+
+    from MLP.experiments.segmentation.segmentation_experiment import visualize
+    if show:
+        visualize(mesh, outputs.detach().cpu().numpy(), data.gt_label.cpu().numpy(), labels,
+                  data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.y.cpu().numpy(), None, impulse=impulse)
+    # v
     return labels, predicted_udf
 
 def get_model_output_from_index(index, dataset, mesh, model):

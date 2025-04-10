@@ -68,17 +68,19 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
         for epoch in tqdm(range(0, args.epochs )):
             training_loss = train_epoch(epoch, model, args.device, optimizer, train_loader, writer, loss_function)
             torch.cuda.empty_cache()
-            validation_accuracy = np.mean(evaluate(model, args.device, validation_loader, loss_function, ))
+            validation_accuracy, _ = evaluate(model, args.device, validation_loader, loss_function, )
+            validation_accuracy = np.mean(validation_accuracy)
             torch.cuda.empty_cache()
             writer.add_scalar('validation accuracy', validation_accuracy, epoch)
-            test_accuracy = np.mean(evaluate(model, args.device, test_loader, loss_function, ))
+            test_accuracy, _ = evaluate(model, args.device, test_loader, loss_function, )
+            test_accuracy = np.mean(test_accuracy)
             writer.add_scalar('test accuracy', test_accuracy, epoch)
             writer.add_scalars("Loss", {f"train_DC_{complexity}": training_loss,
                                                     f"Test_DC_{complexity}": validation_accuracy}, epoch)
 
             chamfer_value, num_non_fractures, _ = n_chamfer_values_deltaconv(chamfer_loader,
                                        model,
-                                       num_chamfer_values=10, edge=True)
+                                       num_chamfer_values=10, edge=True, visualize=False)
 
             writer.add_scalar(f'DC_chamfer_{complexity}', chamfer_value, epoch)
             writer.add_scalar(f'DC_non_fracture_{complexity}', num_non_fractures, epoch)
@@ -88,13 +90,14 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
             if validation_accuracy < best_validation:
                 best_validation = validation_accuracy
                 best_validation_test_score = test_accuracy
-                torch.save(model.state_dict(), osp.join(args.checkpoint_dir, 'best.pt'))
+                torch.save(model.state_dict(), osp.join(args.checkpoint_dir, f'{epoch}.pt'))
             scheduler.step()
             # if epoch % 10 == 0:
             #     visualize_model_output(model, test_loader, args.device, test_dataset)
     else:
         model.load_state_dict(torch.load(args.checkpoint))
-        best_validation_test_score = np.mean(evaluate(model, args.device, test_loader, loss_function, ))
+        best_validation_test_score, _ = evaluate(model, args.device, test_loader, loss_function, )
+        best_validation_test_score = np.mean(best_validation_test_score)
 
     print("Test accuracy: {}".format(best_validation_test_score))
     # visualize_model_output(model, test_loader, args.device, test_dataset)
@@ -181,19 +184,25 @@ def evaluate(model, device, loader, loss_function):
     """Evaluate the model for on each item in the loader."""
     model.eval()
     losses = []
+    durations = []
     # print("evaluata")
     visualized = False
     for data in loader:
         data = data.to(device)
 
         # data.x = data.x.clone().detach().requires_grad_(True)
+        time_start = time.time()
         out = model(data)
         out = out.squeeze()
+
+        durations.append(time.time() - time_start)
 
         if not visualized:
             visualized = True
 
-            # visualize(mesh, out.detach().cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.y.cpu().numpy(), None )
+            # from MLP.experiments.segmentation.segmentation_experiment import visualize
+            # mesh = load_mesh_from_file("/home/lukasz/Documents/thesis_pointcloud/data/chair/chair.obj")
+            # visualize(mesh, out.detach().cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.gt_label.cpu().numpy(), data.y.cpu().numpy(), None, )
             # visualize(mesh, outputs.detach().cpu().numpy(), data.gt_label.cpu().numpy(), labels_region_growing,
             #           labels_fzs, fzs_div_labels, data.y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy())
 
@@ -207,7 +216,7 @@ def evaluate(model, device, loader, loss_function):
         torch.cuda.empty_cache()
         del data , out, loss
         torch.cuda.empty_cache()
-    return losses
+    return losses, np.mean(durations)
 
 
 def evaluate_with_time(model, device, loader, loss_function):
@@ -324,8 +333,9 @@ if __name__ == "__main__":
     # Start training process
     torch.manual_seed(args.seed)
 
-    path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets"
-    dataset_name = "bunny"
+    # path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets"
+    path = "/home/lukasz/Documents/thesis_pointcloud/datasets"
+    dataset_name = "chair"
     batch_size = 6
     num_workers = 4
 
@@ -334,7 +344,7 @@ if __name__ == "__main__":
     pre_transform = Compose((
         T.NormalizeScale(),
         GenerateMeshNormals(),
-        # T.SamplePoints(args.num_points * args.sampling_margin, include_normals=True, include_labels=True),
+        # T.SamplePoints(args.num_points, include_normals=True, include_labels=True, remove_faces=False),
         # T.GeodesicFPS(args.num_points)
     ))
 
@@ -348,7 +358,10 @@ if __name__ == "__main__":
 
     train_dataset = FractureGeomDataset(path, 'train', dataset_name=dataset_name, pre_transform=pre_transform, )
     test_dataset = FractureGeomDataset(path, 'test', dataset_name=dataset_name, pre_transform=pre_transform)
-    validation_dataset = FractureGeomDataset(path, 'validation', dataset_name=dataset_name, pre_transform=pre_transform)
+    validation_dataset = FractureGeomDataset(path, 'validation', dataset_name=dataset_name, pre_transform=Compose((
+        T.NormalizeScale(),
+        GenerateMeshNormals()))
+    )
 
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True)

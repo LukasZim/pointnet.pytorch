@@ -92,3 +92,41 @@ class RegionGrowing:
 
 
 
+class LocalExtremes:
+    def __init__(self, mesh, predicted_UDF, gt_UDF):
+        self.vertices = np.asarray(mesh.vertices)
+        self.faces = np.asarray(mesh.triangles)
+        self.udf = predicted_UDF
+
+    def create_graph(self):
+        # create a graph with all edges of the mesh
+        G = nx.Graph()
+        all_edges = [(x,y) for [a,b,c] in self.faces for x,y in [(a,b), (a,c), (b,c)]]
+        G.add_edges_from(all_edges)
+
+        # take udf property from vertices and add them to graph nodes
+        node_value_dict = dict(zip(G.nodes, self.udf))
+        nx.set_node_attributes(G, node_value_dict, 'udf')
+        return G
+
+    def local_extremes(self):
+        G = self.create_graph()
+        labels = []
+
+        for node in G.nodes:
+            value = G.nodes[node]['udf']
+            neighbors = G.neighbors(node)
+
+            neighbor_values = [G.nodes[n]['udf'] for n in neighbors]
+
+            # if all(value < nv for nv in neighbor_values):
+            #     labels.append(1)
+
+            if all(value > nv for nv in neighbor_values):
+                labels.append(1)
+
+            else:
+                labels.append(0)
+
+        return np.array(labels)
+

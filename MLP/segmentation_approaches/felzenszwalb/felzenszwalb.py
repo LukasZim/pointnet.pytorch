@@ -8,11 +8,12 @@ from .utils import smoothen, difference, get_random_rgb_image
 
 
 class FelzensZwalbSegmentation:
-    def __init__(self, mesh, predicted_udf, gt_udf):
+    def __init__(self, mesh, predicted_udf, gt_udf, not_divergent):
         self.vertices = np.asarray(mesh.vertices)
         self.faces = np.asarray(mesh.triangles)
         self.predicted_udf = predicted_udf
         self.gt_udf = gt_udf
+        self.normal = not_divergent
 
     def segment_graph(self, num_vertices, num_edges, edges, c):
         edges[0: num_edges, :] = edges[edges[0: num_edges, 2].argsort()]
@@ -44,8 +45,10 @@ class FelzensZwalbSegmentation:
         for u, v, data in nxg.edges(data=True):
             edges[num, 0] = u
             edges[num, 1] = v
-            # edges[num, 2] = math.pow(10 * (np.max(self.predicted_udf) - data['udf']), 10)
-            edges[num, 2] = data['udf']
+            if self.normal:
+                edges[num, 2] = math.pow(10 * (np.max(self.predicted_udf) - data['udf']), 10)
+            else:
+                edges[num, 2] = data['udf']
             # edges[num, 2] = np.max(self.predicted_udf) - data['udf']
             num += 1
 

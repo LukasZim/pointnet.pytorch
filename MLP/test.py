@@ -14,7 +14,7 @@ import numpy as np
 from MLP.path import Path
 from MLP.segmentation_approaches.divergence import DivergenceSegmentation
 from MLP.segmentation_approaches.felzenszwalb.felzenszwalb import FelzensZwalbSegmentation
-from MLP.segmentation_approaches.region_growing import RegionGrowing
+from MLP.segmentation_approaches.region_growing import RegionGrowing, LocalExtremes
 from MLP.visualize import load_mesh_from_file
 
 
@@ -147,7 +147,7 @@ def visualize():
     model = MLP(9)
     state = torch.load("checkpoints/980.pth")
     model.load_state_dict(state['state_dict'])
-    index_to_use = 6
+    index_to_use = 69
 
     validate_dataloader, validate_dataset = FractureDataLoader(Path().path, type="validate")
     X, y, impulse, label_gt, label_edge = validate_dataset.get_GT(index_to_use)
@@ -197,10 +197,14 @@ def visualize():
 
     # labels = segment_UDF(mesh, predicted_udf, test_targets)
     region_growing_time = time.time()
-    div = DivergenceSegmentation(mesh, predicted_udf, test_targets, gradients[:,:3])
-    labels_div = div.calculate_divergence()
-    fzs = FelzensZwalbSegmentation(mesh, np.abs(labels_div), test_targets)
-    labels = fzs.segment(500, 20)
+    # div = DivergenceSegmentation(mesh, predicted_udf, test_targets, gradients[:,:3])
+    # labels_div = div.calculate_divergence()
+    # fzs = FelzensZwalbSegmentation(mesh, labels_div, test_targets, False)
+    # # labels = fzs.segment(5, 20)
+    #
+    # labels = fzs.segment(500, 20)
+    LE = LocalExtremes(mesh, test_targets, test_targets)
+    labels = LE.local_extremes()
     # region_growing = RegionGrowing(mesh, predicted_udf, test_targets)
     # labels = region_growing.calculate_region_growing()
     print("region growing duration: ", time.time() - region_growing_time)
@@ -210,12 +214,12 @@ def visualize():
     print("chamfer duration: ", time.time() - chamfer_time)
     print('chamfer distance =', chamfer)
     print("champfer key mapping", key_map)
-    print(np.max(labels_div))
+    # print(np.max(labels_div))
     # duration = time.time() - time_start
     # print("duration:",duration)
     # labels = np.array([remap_label(label, key_map) for label in labels])
 
-    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, labels_div, mesh, model, labels, impulse, label_gt, tensorboard_writer)
+    visualize_UDF_polyscope(gradients[:, :3], predicted_udf, test_targets, mesh, model, labels, impulse, label_gt, tensorboard_writer)
 
 def remap_label(label, key_map):
     for (new_label, old_label) in key_map:

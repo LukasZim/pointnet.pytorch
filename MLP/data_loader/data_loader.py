@@ -135,7 +135,7 @@ def FractureDataLoader(path, type):
     #
     # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    dataset = FractureDataset(path, chunk_size=500, dataset_type=type)
+    dataset = FractureDataset(path, chunk_size=100, dataset_type=type)
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, )
 
     return dataloader, dataset
@@ -162,6 +162,7 @@ class FractureGeomDataset(InMemoryDataset):
         self.files_used = 0
         self.mesh_vertices = []
         self.mesh_triangles = []
+        self.split = split
         for file in os.listdir(os.path.join(root, self.used_dataset_name)):
             if not file.split(".")[-1] == "pkl":
                 continue
@@ -245,9 +246,12 @@ class FractureGeomDataset(InMemoryDataset):
             else:
                 data_list_validate.append(data)
             # visualize_mesh_from_data_obj(data)
-        torch.save(self.collate(data_list), self.processed_paths[0])
-        torch.save(self.collate(data_list_validate), self.processed_paths[1])
-        torch.save(self.collate(data_list_test), self.processed_paths[2])
+        if self.split == 'train':
+            torch.save(self.collate(data_list), self.processed_paths[0])
+        if self.split == 'validation':
+            torch.save(self.collate(data_list_validate), self.processed_paths[1])
+        if self.split == 'test':
+            torch.save(self.collate(data_list_test), self.processed_paths[2])
 
         # save data_list to disk, after applying self.collate to the data_list
 

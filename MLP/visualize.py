@@ -15,6 +15,7 @@ def create_mesh_from_faces_and_vertices(faces, vertices):
     # retrieve and set fine faces
     fine_mesh.triangles = o3d.utility.Vector3iVector(faces)
     fine_mesh.compute_vertex_normals()
+    fine_mesh.compute_triangle_normals()
     return fine_mesh
 
 

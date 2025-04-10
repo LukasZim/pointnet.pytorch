@@ -33,8 +33,8 @@ if __name__ == '__main__':
     max_epochs = 50
 
     # define the datasets for MLP
-    path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets/bunny"
-    mesh_path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets/bunny/bunny.obj"
+    path = "/home/lukasz/Documents/thesis_pointcloud/datasets/chair/"
+    mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/chair/chair.obj"
 
     from MLP.data_loader.data_loader import FractureDataLoader, FractureGeomDataset
     train_dataloader_mlp, train_dataset_mlp = FractureDataLoader(path, type="train")
@@ -43,8 +43,8 @@ if __name__ == '__main__':
     mesh = load_mesh_from_file(mesh_path)
 
     #define everything for DeltaConv
-    path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets/"
-    dataset_name = "bunny"
+    path = "/home/lukasz/Documents/thesis_pointcloud/datasets/"
+    dataset_name = "chair"
     batch_size = 6
     num_workers = 4
 
@@ -94,9 +94,9 @@ if __name__ == '__main__':
                         chamfer_loader=chamfer_loader, validation_dataset=validation_dataset)
 
 
-        time_start = time.time()
-        deltaconv_losses = evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
-        deltaconv_evaluation_time = time.time() - time_start
+        # time_start = time.time()
+        deltaconv_losses , deltaconv_evaluation_time= evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
+        # deltaconv_evaluation_time = time.time() - time_start
         time_start = time.time()
         edge_chamfer_value_deltaconv, num_non_fractures_deltaconv, edge_chamfer_values_list_deltaconv = n_chamfer_values_deltaconv(chamfer_loader,
                                                                                    trained_deltaconv_model,
@@ -122,7 +122,7 @@ if __name__ == '__main__':
         # call the training of the MLP
         # and output the best performing model on the testing set
         print("start MLP training")
-        mlp_model = create_MLP_model(complexity)
+        mlp_model = create_MLP_model(complexity).to('cuda')
 
         trained_mlp_model = train_model(max_epochs, complexity, mlp_model, tensorboard_writer=tensorboard_writer, mesh=mesh,
                     train_dataloader=train_dataloader_mlp, train_dataset=train_dataset_mlp, test_dataloader=test_dataloader_mlp,
@@ -133,9 +133,8 @@ if __name__ == '__main__':
         print("start evaluation")
         # loop over the validation set
         # and calculate the loss for both models
-        time_start = time.time()
-        _, mlp_losses = run_epoch(trained_mlp_model, validate_dataloader_mlp, optimizer=None, train=False)
-        MLP_evaluation_time = time.time() - time_start
+        _, mlp_losses, durations = run_epoch(trained_mlp_model, validate_dataloader_mlp, optimizer=None, train=False)
+        MLP_evaluation_time = np.mean(durations)
         time_start = time.time()
         edge_chamfer_value, num_non_fractures, edge_chamfer_values_list = calculate_n_minimum_chamfer_values(validate_dataset_mlp, trained_mlp_model, mesh, num_chamfer_values=100000, edge=True)
         MLP_chamfer_time = time.time() - time_start
@@ -173,6 +172,7 @@ if __name__ == '__main__':
             'MLP_evaluation_time': MLP_evaluation_time,
             'MLP_chamfer_time': MLP_chamfer_time,
             'MLP_evaluation_size': validate_dataset_mlp.get_GT_size(),
+            'MLP_losses': mlp_losses,
 
             'mlp_edge_chamfer_value': edge_chamfer_value,
             'mlp_num_non_fractures': num_non_fractures,
@@ -180,6 +180,7 @@ if __name__ == '__main__':
             'mlp_chamfer_median': chamfer_median_mlp,
             'mlp_chamfer_min': chamfer_min_mlp,
             'mlp_chamfer_max': chamfer_max_mlp,
+            'mlp_chamfer_values_list': edge_chamfer_values_list,
 
 
             'deltaconv_loss': validation_loss_deltaconv,
@@ -190,6 +191,7 @@ if __name__ == '__main__':
             'deltaconv_evaluation_time': deltaconv_evaluation_time,
             'deltaconv_chamfer_time': deltaconv_chamfer_time,
             'deltaconv_chamfer_size': len(validation_dataset),
+            'deltaconv_losses': deltaconv_losses,
 
             'deltaconv_edge_chamfer_value': edge_chamfer_value_deltaconv,
             'deltaconv_num_non_fractures': num_non_fractures_deltaconv,
@@ -197,6 +199,7 @@ if __name__ == '__main__':
             'deltaconv_chamfer_median': chamfer_median_deltaconv,
             'deltaconv_chamfer_min': chamfer_min_deltaconv,
             'deltaconv_chamfer_max': chamfer_max_deltaconv,
+            'deltaconv_chamfer_values_list': edge_chamfer_values_list_deltaconv,
         }
         df = pd.DataFrame([data])
         df.to_csv(csv_filename, mode='a', header = (complexity ==1), index=False)
