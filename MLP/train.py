@@ -94,8 +94,10 @@ def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=T
         dur = []
         for index, (coordinates, udf_value, impulse, gt_label, label_edge) in enumerate(zip(points, udf_values, impulses, gt_labels, label_edges)):
             size += 1
+            torch.cuda.synchronize()
             time_start = time.time()
             model_output, _ = run_model(coordinates, udf_value, impulse, model, optimizer=optimizer, train=train)
+            torch.cuda.synchronize()
             dur.append(time.time() - time_start)
             loss = loss_function(model_output, udf_value)
             if train:
@@ -118,8 +120,8 @@ def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=T
 if __name__ == '__main__':
     tensorboard_writer = SummaryWriter(log_dir=f"runs/MLP_{time.strftime('%Y%m%d-%H%M%S')}")
 
-    path = "/home/lukasz/Documents/thesis_pointcloud/datasets/chair"
-    mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/chair/chair.obj"
+    path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny"
+    mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/bunny/bunny.obj"
 
     train_dataloader, train_dataset = FractureDataLoader(path, type="train")
     test_dataloader, test_dataset = FractureDataLoader(path, type="test")
@@ -137,7 +139,7 @@ if __name__ == '__main__':
         testing_loss, _ , _= run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
 
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
-        edge_chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, edge=True)
+        edge_chamfer_value , _ , _ = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, edge=True)
 
         tensorboard_writer.add_scalars("Loss", {"Train": training_loss  , "Test": testing_loss}, epoch)
         time_start = time.time()
@@ -155,7 +157,7 @@ if __name__ == '__main__':
             tensorboard_writer.add_image(f"predicted_udf/{epoch}", ss_predicted_udf, dataformats="HWC")
             print("screenshots take this long", time.time() - time_start)
         # tensorboard_writer.add_scalar('chamfer', chamfer_value, epoch)
-        # tensorboard_writer.add_scalar('edge_chamfer', edge_chamfer_value, epoch)
+        tensorboard_writer.add_scalar('edge_chamfer', edge_chamfer_value, epoch)
 
 
         # print(f'Finished Epoch {epoch + 1}')
@@ -174,7 +176,7 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
         testing_loss , _ , _= run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
 
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
-        edge_chamfer_value, num_non_fractures, _ = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=10, edge=True)
+        # edge_chamfer_value, num_non_fractures, _ = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=10, edge=True)
 
         tensorboard_writer.add_scalars("Loss", {f"Train_MLP_{complexity}": training_loss  , f"Test_MLP_{complexity}": testing_loss }, epoch)
 
@@ -192,8 +194,8 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
             tensorboard_writer.add_image(f"predicted_udf_MLP_{complexity}", ss_predicted_udf, dataformats="HWC")
 
         # tensorboard_writer.add_scalar('chamfer', chamfer_value, epoch)
-        tensorboard_writer.add_scalar(f'edge_chamfer_MLP_{complexity}', edge_chamfer_value, epoch)
-        tensorboard_writer.add_scalar(f'num_non_fractures_MLP_{complexity}', num_non_fractures, epoch)
+        # tensorboard_writer.add_scalar(f'edge_chamfer_MLP_{complexity}', edge_chamfer_value, epoch)
+        # tensorboard_writer.add_scalar(f'num_non_fractures_MLP_{complexity}', num_non_fractures, epoch)
 
 
         # # print(f'Finished Epoch {epoch + 1}')

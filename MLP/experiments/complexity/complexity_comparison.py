@@ -30,11 +30,13 @@ def create_DeltaConv_model(complexity):
 
 if __name__ == '__main__':
     # set some global variables
-    max_epochs = 50
+    max_epochs = 200
+    dataset_name = "bunny"
+
 
     # define the datasets for MLP
-    path = "/home/lukasz/Documents/thesis_pointcloud/datasets/chair/"
-    mesh_path = "/home/lukasz/Documents/thesis_pointcloud/datasets/chair/chair.obj"
+    path = f"/home/lukasz/Documents/thesis_pointcloud/datasets/{dataset_name}/"
+    mesh_path = f"/home/lukasz/Documents/thesis_pointcloud/datasets/{dataset_name}/{dataset_name}.obj"
 
     from MLP.data_loader.data_loader import FractureDataLoader, FractureGeomDataset
     train_dataloader_mlp, train_dataset_mlp = FractureDataLoader(path, type="train")
@@ -44,7 +46,6 @@ if __name__ == '__main__':
 
     #define everything for DeltaConv
     path = "/home/lukasz/Documents/thesis_pointcloud/datasets/"
-    dataset_name = "chair"
     batch_size = 6
     num_workers = 4
 
@@ -90,12 +91,24 @@ if __name__ == '__main__':
         print("Start Deltaconv training")
 
         delta_conv_model = create_DeltaConv_model(complexity)
-        trained_deltaconv_model = train_deltaconv(writer=tensorboard_writer, epochs= max_epochs, model=delta_conv_model, train_loader=train_loader, test_loader=test_loader, validation_loader=validation_loader, complexity=complexity,
+        trained_deltaconv_model = train_deltaconv(writer=tensorboard_writer, epochs= 50, model=delta_conv_model, train_loader=train_loader, test_loader=test_loader, validation_loader=validation_loader, complexity=complexity,
                         chamfer_loader=chamfer_loader, validation_dataset=validation_dataset)
 
 
         # time_start = time.time()
         deltaconv_losses , deltaconv_evaluation_time= evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
+
+        deltaconv_losses_list = []
+        deltaconv_evaluation_time_list = []
+        for _ in range(5):
+            deltaconv_losses, deltaconv_evaluation_time = evaluate(trained_deltaconv_model, 'cuda', validation_loader,
+                                                                   custom_loss)
+            deltaconv_losses_list.append(deltaconv_losses)
+            deltaconv_evaluation_time_list.append(deltaconv_evaluation_time)
+
+        deltaconv_losses = np.mean(deltaconv_losses_list, axis=0)
+        deltaconv_evaluation_time = np.mean(deltaconv_evaluation_time_list, axis=0)
+
         # deltaconv_evaluation_time = time.time() - time_start
         time_start = time.time()
         edge_chamfer_value_deltaconv, num_non_fractures_deltaconv, edge_chamfer_values_list_deltaconv = n_chamfer_values_deltaconv(chamfer_loader,
@@ -124,7 +137,7 @@ if __name__ == '__main__':
         print("start MLP training")
         mlp_model = create_MLP_model(complexity).to('cuda')
 
-        trained_mlp_model = train_model(max_epochs, complexity, mlp_model, tensorboard_writer=tensorboard_writer, mesh=mesh,
+        trained_mlp_model = train_model(125, complexity, mlp_model, tensorboard_writer=tensorboard_writer, mesh=mesh,
                     train_dataloader=train_dataloader_mlp, train_dataset=train_dataset_mlp, test_dataloader=test_dataloader_mlp,
                     test_dataset=test_dataset_mlp, mesh_path=mesh_path,)
 
@@ -134,6 +147,16 @@ if __name__ == '__main__':
         # loop over the validation set
         # and calculate the loss for both models
         _, mlp_losses, durations = run_epoch(trained_mlp_model, validate_dataloader_mlp, optimizer=None, train=False)
+        mlp_losses_list = []
+        mlp_durations_list = []
+        for i in range(5):
+            _, mlp_losses, durations = run_epoch(trained_mlp_model, validate_dataloader_mlp, optimizer=None,
+                                                 train=False)
+            mlp_losses_list.append(mlp_losses)
+            mlp_durations_list.append(durations)
+        mlp_losses = np.mean(mlp_losses_list, axis=0)
+        durations  = np.mean(mlp_durations_list, axis=0)
+
         MLP_evaluation_time = np.mean(durations)
         time_start = time.time()
         edge_chamfer_value, num_non_fractures, edge_chamfer_values_list = calculate_n_minimum_chamfer_values(validate_dataset_mlp, trained_mlp_model, mesh, num_chamfer_values=100000, edge=True)

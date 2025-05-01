@@ -170,8 +170,8 @@ def train_epoch(epoch, model, device, optimizer, loader, writer, loss_function):
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
-        torch.cuda.empty_cache()
-        del data , out, loss
+        # torch.cuda.empty_cache()
+        # del data , out, loss
     writer.add_scalar('training loss',
                       np.mean(losses),
                       epoch)
@@ -189,12 +189,12 @@ def evaluate(model, device, loader, loss_function):
     visualized = False
     for data in loader:
         data = data.to(device)
-
+        torch.cuda.synchronize()
         # data.x = data.x.clone().detach().requires_grad_(True)
         time_start = time.time()
         out = model(data)
         out = out.squeeze()
-
+        torch.cuda.synchronize()
         durations.append(time.time() - time_start)
 
         if not visualized:
@@ -213,9 +213,9 @@ def evaluate(model, device, loader, loss_function):
         losses.append(loss.item())
 
 
-        torch.cuda.empty_cache()
-        del data , out, loss
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
+        # del data , out, loss
+        # torch.cuda.empty_cache()
     return losses, np.mean(durations)
 
 
@@ -242,9 +242,9 @@ def evaluate_with_time(model, device, loader, loss_function):
         times.append(duration)
 
 
-        torch.cuda.empty_cache()
-        del data , out, loss
-        torch.cuda.empty_cache()
+        # torch.cuda.empty_cache()
+        # del data , out, loss
+        # torch.cuda.empty_cache()
     return losses, times
 
 
@@ -335,14 +335,14 @@ if __name__ == "__main__":
 
     # path = "/home/lukasz/Documents/pointnet.pytorch/MLP/datasets"
     path = "/home/lukasz/Documents/thesis_pointcloud/datasets"
-    dataset_name = "chair"
+    dataset_name = "bunny_non_geodesic"
     batch_size = 6
     num_workers = 4
 
 
     # Apply pre-transformations: normalize, get mesh normals, and sample points on the mesh.
     pre_transform = Compose((
-        T.NormalizeScale(),
+        # T.NormalizeScale(),
         GenerateMeshNormals(),
         # T.SamplePoints(args.num_points, include_normals=True, include_labels=True, remove_faces=False),
         # T.GeodesicFPS(args.num_points)
@@ -358,10 +358,7 @@ if __name__ == "__main__":
 
     train_dataset = FractureGeomDataset(path, 'train', dataset_name=dataset_name, pre_transform=pre_transform, )
     test_dataset = FractureGeomDataset(path, 'test', dataset_name=dataset_name, pre_transform=pre_transform)
-    validation_dataset = FractureGeomDataset(path, 'validation', dataset_name=dataset_name, pre_transform=Compose((
-        T.NormalizeScale(),
-        GenerateMeshNormals()))
-    )
+    validation_dataset = FractureGeomDataset(path, 'validation', dataset_name=dataset_name, )
 
     train_loader = DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers, drop_last=True)

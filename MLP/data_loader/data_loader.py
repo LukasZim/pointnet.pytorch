@@ -76,10 +76,10 @@ class FractureDataset(Dataset):
         df = pd.read_pickle(self.impulse[file_index])
         impulse = df.values[0]
 
-        pcd = pcd[start_index: start_index + self.chunk_size]
-        udf = udf[start_index: start_index + self.chunk_size]
-        label_gt = label_gt[start_index: start_index + self.chunk_size]
-        label_edge = label_edge[start_index: start_index + self.chunk_size]
+        # pcd = pcd[start_index: start_index + self.chunk_size]
+        # udf = udf[start_index: start_index + self.chunk_size]
+        # label_gt = label_gt[start_index: start_index + self.chunk_size]
+        # label_edge = label_edge[start_index: start_index + self.chunk_size]
 
         pcd = torch.tensor(pcd, dtype=torch.float32)
         udf = torch.tensor(udf, dtype=torch.float32)
@@ -112,9 +112,9 @@ class FractureDataset(Dataset):
         for file_index, path in self.udf.items():
 
             num_points = pd.read_pickle(path).shape[0]
-            for start_index in range(0, num_points - self.chunk_size, self.chunk_size):
-                indices.append((file_index, start_index))
-
+            # for start_index in range(0, num_points - self.chunk_size, self.chunk_size):
+            #     indices.append((file_index, start_index))
+            indices.append((file_index, 0))
         return indices
 
 

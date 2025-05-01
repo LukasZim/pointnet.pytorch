@@ -79,6 +79,7 @@ def get_model_output(mesh, pcd, impulse, model, gt_udf):
 
 
 
+
     # minimum_cut = minimum_cut_segmentation(mesh, predicted_udf, gt_udf)
     # labels = minimum_cut.calculate_minimum_cut()
     return labels, predicted_udf

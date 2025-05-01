@@ -1,3 +1,5 @@
+import time
+
 import torch
 from torch.nn import Sequential as Seq, Dropout, LeakyReLU, Linear, ReLU6, ReLU, BatchNorm1d
 from torch_geometric.nn import global_max_pool
@@ -33,7 +35,7 @@ class DeltaNetRegression(torch.nn.Module):
         super().__init__()
 
 
-        self.deltanet_base = DeltaNetBase(in_channels, conv_channels, mlp_depth, num_neighbors, grad_regularizer, grad_kernel_width)
+        self.deltanet_base = DeltaNetBase(in_channels, conv_channels, mlp_depth, num_neighbors, grad_regularizer, grad_kernel_width, centralize_first=False)
 
         # Global embedding
         self.lin_global = MLP([sum(conv_channels), embedding_size])
@@ -45,14 +47,43 @@ class DeltaNetRegression(torch.nn.Module):
 
 
     def forward(self, data):
+        # print("=====================")
+        # time_start = time.time()
+        # torch.cuda.synchronize()
         conv_out = self.deltanet_base(data)
+        # torch.cuda.synchronize()
+        # print(time.time() - time_start)
 
+        # time_start = time.time()
+        # torch.cuda.synchronize()
         x = torch.cat(conv_out, dim=1)
-        x = self.lin_global(x)
+        # torch.cuda.synchronize()
+        # print(time.time() - time_start)
 
+        # time_start = time.time()
+        # torch.cuda.synchronize()
+        x = self.lin_global(x)
+        # torch.cuda.synchronize()
+        # print(time.time() - time_start)
+
+        # time_start = time.time()
+        # torch.cuda.synchronize()
         batch = data.batch
         x_max = global_max_pool(x, batch)[batch]
+        # torch.cuda.synchronize()
+        # print(time.time() - time_start)
 
+        # time_start = time.time()
+        # torch.cuda.synchronize()
         x = torch.cat([x_max] + conv_out, dim=1)
+        # torch.cuda.synchronize()
+        # print(time.time() - time_start)
 
-        return self.segmentation_head(x)
+        # time_start = time.time()
+        # torch.cuda.synchronize()
+        p = self.segmentation_head(x)
+        # torch.cuda.synchronize()
+        # print(time.time() - time_start)
+        # print("===============================")
+
+        return p
