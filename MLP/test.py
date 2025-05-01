@@ -15,6 +15,7 @@ import numpy as np
 from MLP.path import Path
 from MLP.segmentation_approaches.divergence import DivergenceSegmentation
 from MLP.segmentation_approaches.felzenszwalb.felzenszwalb import FelzensZwalbSegmentation
+from MLP.segmentation_approaches.hierarchical_clustering import HierarchicalClustering
 from MLP.segmentation_approaches.region_growing import RegionGrowing, LocalExtremes
 from MLP.segmentation_approaches.watershed import Watershed
 from MLP.visualize import load_mesh_from_file
@@ -150,7 +151,7 @@ def visualize():
     state = torch.load("checkpoints/980.pth")
     model.load_state_dict(state['state_dict'])
     # index_to_use = 63
-    index_to_use = 57
+    index_to_use = 63
 
     validate_dataloader, validate_dataset = FractureDataLoader(Path().path, type="validate")
     X, y, impulse, label_gt, label_edge = validate_dataset.get_GT(index_to_use)
@@ -158,10 +159,10 @@ def visualize():
     mesh_path = state['mesh_path']
     mesh = load_mesh_from_file(mesh_path)
 
-    random_vertex = np.asarray(mesh.vertices)[random.randint(0, len(mesh.vertices) - 1)]
-    impulse[0] = random_vertex[0]
-    impulse[1] = random_vertex[1]
-    impulse[2] = random_vertex[2]
+    # random_vertex = np.asarray(mesh.vertices)[random.randint(0, len(mesh.vertices) - 1)]
+    # impulse[0] = random_vertex[0]
+    # impulse[1] = random_vertex[1]
+    # impulse[2] = random_vertex[2]
 
 
 
@@ -206,8 +207,11 @@ def visualize():
     # # labels = fzs.segment(5, 20)
     #
     # labels = fzs.segment(500, 20)
-    watershed = Watershed(mesh, predicted_udf)
-    labels = watershed.calculate_watershed()
+    # watershed = Watershed(mesh, predicted_udf)
+    # labels = watershed.calculate_watershed()
+
+    h_cluster = HierarchicalClustering(mesh, predicted_udf)
+    labels = h_cluster.calculate_hierarchical_clustering()
 
     # LE = LocalExtremes(mesh, test_targets, test_targets)
     # labels = LE.local_extremes()

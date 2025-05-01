@@ -79,3 +79,4 @@ class Watershed:
                 local_max.append(node)
 
         return local_max, list(range(len(local_max)))
+
