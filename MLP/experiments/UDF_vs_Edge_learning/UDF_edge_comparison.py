@@ -9,7 +9,7 @@ from torch_geometric.transforms import Compose, GenerateMeshNormals
 from MLP.metrics import calculate_n_minimum_chamfer_values, n_chamfer_values_deltaconv
 from MLP.model.MLP import MLP_constant
 from MLP.model.deltanet_regression import DeltaNetRegression
-from MLP.model.loss import custom_loss
+from MLP.model.loss import adjusted_l1_loss
 from MLP.train import train_model, run_epoch
 from MLP.train_deltaconv import train_deltaconv, evaluate
 from MLP.visualize import load_mesh_from_file
@@ -87,7 +87,7 @@ if __name__ == '__main__':
 
 
 
-    validation_loss_deltaconv, _ = evaluate(trained_deltaconv_model, 'cuda', validation_loader, custom_loss)
+    validation_loss_deltaconv, _ = evaluate(trained_deltaconv_model, 'cuda', validation_loader, adjusted_l1_loss)
     validation_loss_deltaconv = np.mean(validation_loss_deltaconv)
     edge_chamfer_value_deltaconv, num_non_fractures_deltaconv, _ = n_chamfer_values_deltaconv(chamfer_loader,
                                                                                trained_deltaconv_model,

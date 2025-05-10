@@ -31,8 +31,9 @@ class MLP_constant(nn.Module):
         self.layer_size = layer_size
         self.layers = nn.Sequential(
             nn.Linear(in_channels, layer_size),
+            nn.LayerNorm(layer_size),
             nn.ReLU(),
-            *[nn.Sequential(nn.Linear(layer_size, layer_size), nn.ReLU()) for _ in range(num_layers)],
+            *[nn.Sequential(nn.Linear(layer_size, layer_size), nn.LayerNorm(layer_size), nn.ReLU()) for _ in range(num_layers)],
             nn.Linear(layer_size, 1),
         )
 

@@ -12,8 +12,15 @@ def log_loss():
     return nn.NLLLoss()
 
 
-def custom_loss(output, target):
+def adjusted_l1_loss(output, target):
     assert output.shape == target.shape
     alpha = 10
     loss = torch.sum(torch.abs(output - target) / (1 + alpha * target))
+    return loss / len(target)
+
+
+def adjusted_l2_loss(output, target):
+    assert output.shape == target.shape
+    alpha = 10
+    loss = torch.sum(torch.square(torch.abs(output - target) / (1 + alpha * target)))
     return loss / len(target)

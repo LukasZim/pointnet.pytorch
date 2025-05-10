@@ -74,7 +74,7 @@ def run_model(points, udf_values, impulses, used_model, optimizer=None, train=Fa
     return model_output.squeeze(), points_with_impulses
 
 
-def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=True):
+def run_epoch(model, dataloader, optimizer, loss_function = adjusted_l1_loss, train=True):
     training_loss = 0.0
     losses = []
 
@@ -106,8 +106,8 @@ def run_epoch(model, dataloader, optimizer, loss_function = custom_loss, train=T
 
             training_loss += loss.item()
             losses.append(loss.item())
-            if i == 0:
-                print(f"loss after mini-batch %5d: %.3f" % (i + 1, loss / 50))
+            # if i == 0:
+            #     print(f"loss after mini-batch %5d: %.3f" % (i + 1, loss / 50))
                 # if index ==0 and epoch % 50 == 0:
                 #     if train:
                 #         do_visualize_quick(mesh, dataset, model)
@@ -127,7 +127,7 @@ if __name__ == '__main__':
     test_dataloader, test_dataset = FractureDataLoader(path, type="test")
     model = MLP_constant(9, 4, 256).to("cuda")
 
-    loss_function = custom_loss
+    loss_function = adjusted_l1_loss
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
     for epoch in tqdm(range(0, 200)):
@@ -167,14 +167,14 @@ if __name__ == '__main__':
 
     # visualize()
 
-def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_dataloader, train_dataset, test_dataloader, test_dataset, mesh_path, loss_function=custom_loss):
+def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_dataloader, train_dataset, test_dataloader, test_dataset, mesh_path, loss_function=adjusted_l1_loss):
 
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
 
     for epoch in tqdm(range(0, num_epochs)):
         training_loss , _ , _= run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
         testing_loss , _ , _= run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
-
+        print(training_loss)
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
         # edge_chamfer_value, num_non_fractures, _ = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=10, edge=True)
 

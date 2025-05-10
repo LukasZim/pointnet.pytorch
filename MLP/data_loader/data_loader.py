@@ -7,7 +7,7 @@ from tqdm import tqdm
 
 
 class FractureDataset(Dataset):
-    def __init__(self, root_directory, chunk_size, dataset_type="train"):
+    def __init__(self, root_directory, dataset_type="train"):
         self.udf = {}
         self.impulse = {}
         self.dataset_type = dataset_type
@@ -29,7 +29,6 @@ class FractureDataset(Dataset):
                 if correct:
                     self.impulse[index] = os.path.join(root_directory, file)
 
-        self.chunk_size = chunk_size
         self.data_indices = self._prepare_data_indices()
 
     def _drop_if_wrong_type(self, index):
@@ -125,7 +124,7 @@ def variable_size_collate_fn(batch):
     return batch
 
 
-def FractureDataLoader(path, type):
+def FractureDataLoader(path, type, batch_size=1):
     # df = pd.read_pickle(path)
     # print(df.head())
 
@@ -135,8 +134,8 @@ def FractureDataLoader(path, type):
     #
     # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-    dataset = FractureDataset(path, chunk_size=100, dataset_type=type)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0, )
+    dataset = FractureDataset(path, dataset_type=type)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=0, )
 
     return dataloader, dataset
 

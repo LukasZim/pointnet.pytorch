@@ -13,7 +13,7 @@ from tqdm import tqdm
 
 from MLP.metrics import n_chamfer_values_deltaconv
 from MLP.model.deltanet_regression import DeltaNetRegression
-from MLP.model.loss import l2_loss, l1_loss, custom_loss
+from MLP.model.loss import l2_loss, l1_loss, adjusted_l1_loss
 import deltaconv.transforms as T
 from deltaconv.models import DeltaNetSegmentation
 
@@ -53,7 +53,7 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
     else:
         model = model.to(args.device)
 
-    loss_function = custom_loss
+    loss_function = adjusted_l1_loss
 
     if not args.evaluating:
         # Setup optimizer and scheduler

@@ -12,7 +12,7 @@ from MLP.experiments.complexity.complexity_comparison import create_DeltaConv_mo
 from MLP.metrics import calculate_n_minimum_chamfer_values, n_chamfer_values_deltaconv, contour_chamfer_distance
 from MLP.model.MLP import MLP_constant, MLP
 from MLP.model.deltanet_regression import DeltaNetRegression
-from MLP.model.loss import custom_loss
+from MLP.model.loss import adjusted_l1_loss
 from MLP.segmentation_approaches.divergence import DivergenceSegmentation
 from MLP.segmentation_approaches.felzenszwalb.felzenszwalb import FelzensZwalbSegmentation
 from MLP.segmentation_approaches.minimum_cut import minimum_cut_segmentation

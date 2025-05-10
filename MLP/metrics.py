@@ -5,7 +5,8 @@ from tqdm import tqdm
 
 from MLP.segmentation_approaches.felzenszwalb.felzenszwalb import FelzensZwalbSegmentation
 from MLP.segmentation_approaches.minimum_cut import minimum_cut_segmentation
-from MLP.segmentation_approaches.region_growing import RegionGrowing
+# from MLP.segmentation_approaches.region_growing import RegionGrowing
+from MLP.segmentation_approaches.watershed import Watershed
 from MLP.visualize import create_mesh_from_faces_and_vertices
 
 
@@ -71,8 +72,11 @@ def get_model_output(mesh, pcd, impulse, model, gt_udf):
 
     predicted_udf = np.array(outputs.squeeze().tolist())
 
-    region_growing = RegionGrowing(mesh, predicted_udf, gt_udf)
-    labels = region_growing.calculate_region_growing()
+    # region_growing = RegionGrowing(mesh, predicted_udf, gt_udf)
+    # labels = region_growing.calculate_region_growing()
+
+    watershed = Watershed(mesh, predicted_udf)
+    labels = watershed.calculate_watershed()
 
 
 
@@ -97,8 +101,10 @@ def get_model_output_DC(data, model, mesh, show=False):
 
     predicted_udf = np.array(outputs.squeeze().tolist())
 
-    region_growing = RegionGrowing(mesh, predicted_udf, gt_udf)
-    labels = region_growing.calculate_region_growing()
+    # region_growing = RegionGrowing(mesh, predicted_udf, gt_udf)
+    # labels = region_growing.calculate_region_growing()
+    watershed = Watershed(mesh, predicted_udf)
+    labels = watershed.calculate_watershed()
 
     from MLP.experiments.segmentation.segmentation_experiment import visualize
     if show:
