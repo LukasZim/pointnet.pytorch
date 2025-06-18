@@ -143,7 +143,7 @@ if __name__ == '__main__':
 
         tensorboard_writer.add_scalars("Loss", {"Train": training_loss  , "Test": testing_loss}, epoch)
         time_start = time.time()
-        if epoch % 10 == 100:
+        if epoch % 10 == 100 and False:
             predicted_labels, predicted_udf, gt_labels, gt_udf = get_model_output_from_index(0, test_dataset, mesh, model)
 
             ss_predicted_labels = get_screenshot_polyscope(mesh, predicted_labels)
@@ -163,7 +163,7 @@ if __name__ == '__main__':
         # print(f'Finished Epoch {epoch + 1}')
         save_checkpoint(epoch, model, optimizer, "checkpoints", train_dataset, mesh_path)
 
-    print("Training Finished")
+    # print("Training Finished")
 
     # visualize()
 
@@ -174,13 +174,13 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
     for epoch in tqdm(range(0, num_epochs)):
         training_loss , _ , _= run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
         testing_loss , _ , _= run_epoch(model, test_dataloader, optimizer, loss_function, train=False)
-        print(training_loss)
+        # print(training_loss)
         # chamfer_value = calculate_n_minimum_chamfer_values(test_dataset, model, mesh)
         # edge_chamfer_value, num_non_fractures, _ = calculate_n_minimum_chamfer_values(test_dataset, model, mesh, num_chamfer_values=10, edge=True)
 
         tensorboard_writer.add_scalars("Loss", {f"Train_MLP_{complexity}": training_loss  , f"Test_MLP_{complexity}": testing_loss }, epoch)
 
-        if epoch == (num_epochs - 1):
+        if epoch == (num_epochs - 1) and False:
             predicted_labels, predicted_udf, gt_labels, gt_udf = get_model_output_from_index(0, test_dataset, mesh, model)
 
             ss_predicted_labels = get_screenshot_polyscope(mesh, predicted_labels)
@@ -201,6 +201,6 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
         # # print(f'Finished Epoch {epoch + 1}')
         # save_checkpoint(epoch, model, optimizer, "checkpoints", train_dataset, mesh_path)
 
-    print("Training Finished")
+    # print("Training Finished")
     return model
 

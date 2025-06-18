@@ -26,7 +26,7 @@ def create_MLP_model(complexity):
 
 if __name__ == '__main__':
     # set some global variables
-    max_epochs = 50
+    max_epochs = 200
     dataset_name = "bunny"
 
 

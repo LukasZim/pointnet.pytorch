@@ -1,6 +1,7 @@
 import numpy as np
 import torch
 from scipy.spatial import KDTree
+from sklearn.metrics import adjusted_rand_score, adjusted_mutual_info_score, mean_squared_error, r2_score
 from tqdm import tqdm
 
 from MLP.segmentation_approaches.felzenszwalb.felzenszwalb import FelzensZwalbSegmentation
@@ -14,7 +15,7 @@ def calculate_n_minimum_chamfer_values(dataset, model, mesh, num_chamfer_values=
     chamfer_values = []
     num_non_fractures = 0
 
-    for i in tqdm(range(min(num_chamfer_values, dataset.get_GT_size()))):
+    for i in range(min(num_chamfer_values, dataset.get_GT_size())):
         pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(i)
         labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
         if edge:
@@ -206,3 +207,96 @@ def contour_chamfer_distance(vertices, triangles, predicted_labels, gt_labels):
         return 0
     return chamfer_distance(predicted_edge_points, gt_edge_points)
 
+
+# def calc_rand_values(loader, model, mesh, use_deltaconv=False):
+#     if use_deltaconv:
+#         return dc_calc_rand_values(loader, model)
+#     return mlp_calc_rand_values(loader, model, mesh)
+
+
+def dc_calc_rand_values(loader, model):
+    rand_values = []
+    for data in loader:
+
+        mesh = create_mesh_from_faces_and_vertices(data.face.T, data.pos)
+        labels, predicted_udf = get_model_output_DC(data, model, mesh)
+
+
+        gt_labels = data.gt_label.cpu().numpy()
+        rand_values.append(adjusted_rand_score(labels, gt_labels))
+    return np.mean(rand_values)
+
+def mlp_calc_rand_values(dataset, model, mesh):
+    rand_values = []
+
+    for i in range(dataset.get_GT_size()):
+        pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(i)
+        labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
+
+        rand_values.append(adjusted_rand_score(labels, gt_labels))
+    return np.mean(rand_values)
+
+
+def dc_calc_norm_info_score(loader, model):
+    adjusted_mutual_info_score_values = []
+    for data in loader:
+        mesh = create_mesh_from_faces_and_vertices(data.face.T, data.pos)
+        labels, predicted_udf = get_model_output_DC(data, model, mesh)
+
+        gt_labels = data.gt_label.cpu().numpy()
+        adjusted_mutual_info_score_values.append(adjusted_mutual_info_score(labels, gt_labels))
+    return np.mean(adjusted_mutual_info_score_values)
+
+
+def mlp_calc_norm_info_score(dataset, model, mesh):
+    adjusted_mutual_info_score_values = []
+
+    for i in range(dataset.get_GT_size()):
+        pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(i)
+        labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
+
+        adjusted_mutual_info_score_values.append(adjusted_mutual_info_score(labels, gt_labels))
+    return np.mean(adjusted_mutual_info_score_values)
+
+
+def dc_mse_loss(loader, model):
+    mse_values = []
+    for data in loader:
+        mesh = create_mesh_from_faces_and_vertices(data.face.T, data.pos)
+        _, predicted_udf = get_model_output_DC(data, model, mesh)
+
+        gt_udf = data.y.cpu().numpy()
+        mse_values.append(mean_squared_error(predicted_udf, gt_udf))
+    return np.mean(mse_values)
+
+
+def mlp_mse_loss(dataset, model, mesh):
+    mse_values = []
+
+    for i in range(dataset.get_GT_size()):
+        pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(i)
+        labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
+
+        mse_values.append(mean_squared_error(predicted_udf, gt_udf))
+    return np.mean(mse_values)
+
+def dc_r2_values(loader, model):
+    r2_values = []
+    for data in loader:
+        mesh = create_mesh_from_faces_and_vertices(data.face.T, data.pos)
+        _, predicted_udf = get_model_output_DC(data, model, mesh)
+
+        gt_udf = data.y.cpu().numpy()
+        r2_values.append(r2_score(predicted_udf, gt_udf))
+    return np.mean(r2_values)
+
+
+def mlp_r2_values(dataset, model, mesh):
+    r2_values = []
+
+    for i in range(dataset.get_GT_size()):
+        pcd, gt_udf, impulse, gt_labels, edge_labels = dataset.get_GT(i)
+        labels, predicted_udf = get_model_output(mesh, pcd, impulse, model, gt_udf)
+
+        r2_values.append(r2_score(predicted_udf, gt_udf))
+    return np.mean(r2_values)

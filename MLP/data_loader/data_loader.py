@@ -182,6 +182,8 @@ class FractureGeomDataset(InMemoryDataset):
             path = self.processed_paths[1]
         elif split == 'test':
             path = self.processed_paths[2]
+        elif split == 'full':
+            path = self.processed_paths[3]
         else:
             raise ValueError((f'Split {split} found, but expected either '
                               'train, val, trainval or test'))
@@ -195,7 +197,7 @@ class FractureGeomDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        return ['training.pt', 'test.pt', 'validate.pt']
+        return [f'{self.used_dataset_name}_training.pt', f'{self.used_dataset_name}_test.pt', f'{self.used_dataset_name}_validate.pt', f'{self.used_dataset_name}_full.pt']
         # return list of file names containing training and test data
 
 
@@ -206,6 +208,7 @@ class FractureGeomDataset(InMemoryDataset):
         data_list = []
         data_list_test = []
         data_list_validate = []
+        data_list_full = []
 
         # read faces from obj file
         mesh = read_obj(os.path.join(self.root, self.used_dataset_name, self.used_dataset_name + ".obj"))
@@ -244,6 +247,7 @@ class FractureGeomDataset(InMemoryDataset):
                 data_list_test.append(data)
             else:
                 data_list_validate.append(data)
+            data_list_full.append(data)
             # visualize_mesh_from_data_obj(data)
         if self.split == 'train':
             torch.save(self.collate(data_list), self.processed_paths[0])
@@ -251,6 +255,8 @@ class FractureGeomDataset(InMemoryDataset):
             torch.save(self.collate(data_list_validate), self.processed_paths[1])
         if self.split == 'test':
             torch.save(self.collate(data_list_test), self.processed_paths[2])
+        if self.split == 'full':
+            torch.save(self.collate(data_list_full), self.processed_paths[3])
 
         # save data_list to disk, after applying self.collate to the data_list
 

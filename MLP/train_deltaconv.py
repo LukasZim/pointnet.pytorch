@@ -13,13 +13,38 @@ from tqdm import tqdm
 
 from MLP.metrics import n_chamfer_values_deltaconv
 from MLP.model.deltanet_regression import DeltaNetRegression
-from MLP.model.loss import l2_loss, l1_loss, adjusted_l1_loss
+from MLP.model.loss import l2_loss, l1_loss, adjusted_l1_loss, adjusted_l2_loss
 import deltaconv.transforms as T
 from deltaconv.models import DeltaNetSegmentation
 
 from deltaconv.experiments.utils import calc_loss
 
 from MLP.visualize import create_mesh_from_faces_and_vertices, load_mesh_from_file
+
+
+
+def train_low_memory(num_epochs, train_loader, model=None, lf="adj_mae"):
+
+    model = model.to('cuda')
+    if lf == "adj_mae":
+        loss_function = adjusted_l1_loss
+    elif lf == "mae":
+        loss_function = l1_loss()
+    elif lf == "adj_mse":
+        loss_function = adjusted_l2_loss
+    elif lf == "mse":
+        loss_function = l2_loss()
+    else:
+        loss_function = adjusted_l1_loss
+
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+
+    for _ in tqdm(range(0, num_epochs )):
+        train_epoch(model, 'cuda', optimizer, train_loader, loss_function)
+        scheduler.step()
+
+    return model
 
 
 def train(args, writer, train_loader, test_loader, validation_loader, validation_dataset, chamfer_loader, model=None, complexity=0):
@@ -66,18 +91,24 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
         best_validation = float('inf')
         best_validation_test_score = 0
         for epoch in tqdm(range(0, args.epochs )):
-            training_loss = train_epoch(epoch, model, args.device, optimizer, train_loader, writer, loss_function)
+            print("train")
+            training_loss = train_epoch(model, args.device, optimizer, train_loader, loss_function)
             torch.cuda.empty_cache()
+            print("test")
             validation_accuracy, _ = evaluate(model, args.device, validation_loader, loss_function, )
             validation_accuracy = np.mean(validation_accuracy)
             torch.cuda.empty_cache()
+
+            writer.add_scalar('training loss',
+                              training_loss,
+                              epoch)
             writer.add_scalar('validation accuracy', validation_accuracy, epoch)
             test_accuracy, _ = evaluate(model, args.device, test_loader, loss_function, )
             test_accuracy = np.mean(test_accuracy)
             writer.add_scalar('test accuracy', test_accuracy, epoch)
             writer.add_scalars("Loss", {f"train_DC_{complexity}": training_loss,
                                                     f"Test_DC_{complexity}": validation_accuracy}, epoch)
-
+            print("chamfer")
             chamfer_value, num_non_fractures, _ = n_chamfer_values_deltaconv(chamfer_loader,
                                        model,
                                        num_chamfer_values=10, edge=True, visualize=False)
@@ -157,7 +188,7 @@ def visualize_model_output(model, loader, device, dataset):
             ps.show()
 
 
-def train_epoch(epoch, model, device, optimizer, loader, writer, loss_function):
+def train_epoch(model, device, optimizer, loader, loss_function):
     """Train the model for one iteration on each item in the loader."""
     model.train()
     losses = []
@@ -170,11 +201,6 @@ def train_epoch(epoch, model, device, optimizer, loader, writer, loss_function):
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
-        # torch.cuda.empty_cache()
-        # del data , out, loss
-    writer.add_scalar('training loss',
-                      np.mean(losses),
-                      epoch)
 
     model.train()
     return np.mean(losses)
@@ -412,13 +438,14 @@ def train_deltaconv(writer, epochs, model, train_loader, test_loader, validation
     parser.add_argument('--checkpoint', type=str, default='',
                         help='Path to the checkpoint to evaluate. The script will only evaluate if a path is given.')
 
-    args = parser.parse_args()
+    args = parser.parse_args(args=[])
 
     # If a checkpoint is given, evaluate the model rather than training.
     args.evaluating = args.checkpoint != ''
 
     # Determine the device to run the experiment
     args.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    args.device = torch.device('cuda')
 
     # Name the experiment, used to store logs and checkpoints.
     args.experiment_name = 'shapeseg'

@@ -4,11 +4,12 @@ import time
 from glob import glob
 
 import torch
-from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import mean_squared_error, r2_score, normalized_mutual_info_score, adjusted_mutual_info_score, \
+    v_measure_score
 from torch.utils.tensorboard import SummaryWriter
 
 from MLP.data_loader.data_loader import FractureDataLoader
-from MLP.metrics import minimum_chamfer_distance
+from MLP.metrics import minimum_chamfer_distance, contour_chamfer_distance
 from MLP.model.MLP import MLP
 import numpy as np
 
@@ -18,8 +19,9 @@ from MLP.segmentation_approaches.felzenszwalb.felzenszwalb import FelzensZwalbSe
 from MLP.segmentation_approaches.hierarchical_clustering import HierarchicalClustering
 from MLP.segmentation_approaches.region_growing import RegionGrowing, LocalExtremes
 from MLP.segmentation_approaches.watershed import Watershed
+from MLP.train import run_epoch
 from MLP.visualize import load_mesh_from_file
-
+from sklearn.metrics import adjusted_rand_score
 
 def calculate_gradient(model, point):
     t = torch.from_numpy(point).float()
@@ -151,10 +153,12 @@ def visualize():
     state = torch.load("checkpoints/980.pth")
     model.load_state_dict(state['state_dict'])
     # index_to_use = 63
-    index_to_use = 63
+    index_to_use = 69
 
     validate_dataloader, validate_dataset = FractureDataLoader(Path().path, type="validate")
     X, y, impulse, label_gt, label_edge = validate_dataset.get_GT(index_to_use)
+
+    run_epoch(model, validate_dataloader, None, train=False)
 
     mesh_path = state['mesh_path']
     mesh = load_mesh_from_file(mesh_path)
@@ -207,11 +211,11 @@ def visualize():
     # # labels = fzs.segment(5, 20)
     #
     # labels = fzs.segment(500, 20)
-    # watershed = Watershed(mesh, predicted_udf)
-    # labels = watershed.calculate_watershed()
+    watershed = Watershed(mesh, predicted_udf)
+    labels = watershed.calculate_watershed()
 
-    h_cluster = HierarchicalClustering(mesh, predicted_udf)
-    labels = h_cluster.calculate_hierarchical_clustering()
+    # h_cluster = HierarchicalClustering(mesh, predicted_udf)
+    # labels = h_cluster.calculate_hierarchical_clustering()
 
     # LE = LocalExtremes(mesh, test_targets, test_targets)
     # labels = LE.local_extremes()
@@ -228,6 +232,22 @@ def visualize():
     # duration = time.time() - time_start
     # print("duration:",duration)
     # labels = np.array([remap_label(label, key_map) for label in labels])
+
+
+    rand_score = adjusted_rand_score(labels, label_gt)
+    print("rand score", rand_score)
+
+    norm_info_score = adjusted_mutual_info_score(labels, label_gt)
+    print('adj info score =', norm_info_score)
+
+    v_measure = v_measure_score(labels, label_gt)
+    print("v_measure =", v_measure)
+
+    print('chamfer distance =', chamfer)
+
+    contour_chamfer_value = contour_chamfer_distance(np.asarray(mesh.vertices), np.asarray(mesh.triangles), labels, label_gt )
+
+    print("contour chamfer distance =", contour_chamfer_value)
 
     visualize_UDF_polyscope(gradients[:, :3], predicted_udf, test_targets, mesh, model, labels, impulse, label_gt, tensorboard_writer)
 

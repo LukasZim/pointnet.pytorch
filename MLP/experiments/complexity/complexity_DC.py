@@ -21,11 +21,11 @@ import deltaconv.transforms as T
 # create a function that takes complexity as input
 # and outputs a DeltaConv model of that complexity
 def create_DeltaConv_model(complexity):
-    return DeltaNetRegression(9, complexity * [32 * complexity], 1, embedding_size=64*complexity, num_neighbors=2 + complexity, grad_regularizer=0.001, grad_kernel_width=1)
+    return DeltaNetRegression(9, complexity * [64 * complexity], 2, embedding_size=200*complexity, num_neighbors=2 + complexity * 3, grad_regularizer=0.001, grad_kernel_width=1)
 
 if __name__ == '__main__':
     # set some global variables
-    max_epochs = 50
+    max_epochs = 200
     dataset_name = "bunny"
 
 
@@ -71,7 +71,7 @@ if __name__ == '__main__':
     tensorboard_writer = SummaryWriter(log_dir=f"runs/DC_experiment_complexity_{time.strftime('%Y%m%d-%H%M%S')}")
     csv_filename = f'DC_complexity_comparison_{time.strftime("%Y%m%d-%H%M%S")}.csv'
     # create a loop that loops over complexity values in a range
-    for complexity in range(1, 8):
+    for complexity in range(1, 20):
         print("CURRENT COMPLEXITY: ", complexity)
         print("Start Deltaconv training")
 
@@ -130,6 +130,7 @@ if __name__ == '__main__':
 
         data = {
             'complexity': complexity,
+            'losses_list': deltaconv_losses_list,
 
 
 
