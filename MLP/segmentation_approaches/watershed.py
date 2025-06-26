@@ -72,7 +72,7 @@ class Watershed:
             neighbours = list(G.neighbors(node))
             is_max = True
             for neighbour in neighbours:
-                if self.UDF[neighbour] > self.UDF[node]:
+                if self.UDF[neighbour] >= self.UDF[node]:
                     is_max = False
                     break
             if is_max:

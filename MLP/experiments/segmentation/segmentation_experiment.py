@@ -79,7 +79,7 @@ def relabel_sorted(labels):
     return [label_map[label] for label in labels]
 
 
-def visualize_toggle(mesh, outputs, gt_label, labels_region_growing, labels_fzs, fzs_div_labels, gt_udf, gradients, index, using_deltaconv):
+def visualize_toggle(mesh, outputs, gt_label, labels_region_growing, labels_fzs, fzs_div_labels, gt_udf, gradients, index, using_deltaconv, impulse):
 
 
     vertices = np.asarray(mesh.vertices)
@@ -126,7 +126,7 @@ def visualize_toggle(mesh, outputs, gt_label, labels_region_growing, labels_fzs,
 
 def store(region_growing_list, region_growing_non_fractures, region_growing_time_list, fzs_list, fzs_non_fractures,
           fzs_time_list, fzs_div_list, fzs_div_non_fractures, fzs_div_time_list, predicted_udf, test_targets, label_gt,
-          gradients, using_deltaconv, index):
+          gradients, using_deltaconv, index, impulse):
     # region growing
     region_growing_time = time.time()
     region_growing = RegionGrowing(mesh, predicted_udf, test_targets)
@@ -191,14 +191,14 @@ def store(region_growing_list, region_growing_non_fractures, region_growing_time
     if using_deltaconv:
         visualize_toggle(mesh, outputs.detach().cpu().numpy(), data.gt_label.cpu().numpy(), labels_region_growing,
                          labels_fzs, fzs_div_labels, data.y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy(),
-                         index, using_deltaconv)
+                         index, using_deltaconv, data.impulse.cpu().numpy())
         # visualize(mesh, outputs.detach().cpu().numpy(), data.gt_label.cpu().numpy(), div_output,
         #                  labels_fzs, fzs_div_labels, data.y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy(),
         #                  index, using_deltaconv)
     else:
         visualize_toggle(mesh, outputs.detach().cpu().numpy(), label_gt, labels_region_growing, labels_fzs,
                          fzs_div_labels, y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy(), index,
-                         using_deltaconv)
+                         using_deltaconv, impulse)
         # visualize(mesh, outputs.detach().cpu().numpy(), label_gt, labels_region_growing, labels_fzs,
         #                  fzs_div_labels, y.cpu().numpy(), gradients[:, :3].detach().cpu().numpy(), index,
         #                  using_deltaconv)
@@ -330,7 +330,7 @@ if __name__ == "__main__":
             MLP_region_growing, MLP_region_growing_non_fractures, MLP_region_growing_time, MLP_fzs,
             MLP_fzs_non_fractures, MLP_fzs_time, MLP_fzs_div, MLP_fzs_div_non_fractures, MLP_fzs_div_time,
             predicted_udf, test_targets, label_gt,
-            gradients, False, i
+            gradients, False, i, impulse
         )
 
     # do same loop for DC
@@ -367,7 +367,7 @@ if __name__ == "__main__":
         DC_region_growing, DC_region_growing_non_fractures, DC_region_growing_time, DC_fzs, DC_fzs_non_fractures, DC_fzs_time, DC_fzs_div, DC_fzs_div_non_fractures, DC_fzs_div_time = store(
             DC_region_growing, DC_region_growing_non_fractures, DC_region_growing_time, DC_fzs, DC_fzs_non_fractures,
             DC_fzs_time, DC_fzs_div, DC_fzs_div_non_fractures, DC_fzs_div_time, predicted_udf, gt_udf, data.gt_label, gradients, True,
-            index)
+            index, None)
 
 
 

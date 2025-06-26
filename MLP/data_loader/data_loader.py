@@ -1,5 +1,7 @@
 import random
 import os
+
+import numpy as np
 import pandas as pd
 from deltaconv.experiments.datasets.shape_seg import read_obj
 from torch.utils.data import Dataset, DataLoader
@@ -7,12 +9,15 @@ from tqdm import tqdm
 
 
 class FractureDataset(Dataset):
-    def __init__(self, root_directory, dataset_type="train"):
+    def __init__(self, root_directory, dataset_type="train", data_indices = None):
         self.udf = {}
         self.impulse = {}
         self.dataset_type = dataset_type
         self.num_files_directory = self._calculate_size(root_directory)
         self.files_used = 0
+        self.root_directory = root_directory
+        if data_indices is not None:
+            self.data_indices = data_indices
         for file in os.listdir(root_directory):
             if not file.split(".")[-1] == "pkl":
                 continue
@@ -29,9 +34,12 @@ class FractureDataset(Dataset):
                 if correct:
                     self.impulse[index] = os.path.join(root_directory, file)
 
-        self.data_indices = self._prepare_data_indices()
+        if data_indices is None:
+            self.data_indices = self._prepare_data_indices()
 
     def _drop_if_wrong_type(self, index):
+        if hasattr(self, "data_indices") and not index in self.data_indices:
+            return False, -1
         if index <= self.num_files_directory * 0.7 and self.dataset_type == "train":
             return True, index
 
@@ -40,6 +48,9 @@ class FractureDataset(Dataset):
 
         if index > self.num_files_directory * 0.85 and self.dataset_type == "validate":
             return True, index - int(self.num_files_directory * 0.85) - 1
+
+        if self.dataset_type == "full":
+            return True, index
 
         return False, -1
 
@@ -63,7 +74,23 @@ class FractureDataset(Dataset):
         return len(self.data_indices)
 
     def __getitem__(self, idx):
-        file_index, start_index = self.data_indices[idx]
+        if isinstance(idx, slice):
+            new_data_indices = self.data_indices[idx]
+            return FractureDataset(
+                root_directory = self.root_directory,
+                dataset_type = self.dataset_type,
+                data_indices = new_data_indices
+            )
+        if isinstance(idx, (list, np.ndarray)):
+            new_data_indices = idx
+            return FractureDataset(
+                root_directory = self.root_directory,
+                dataset_type = self.dataset_type,
+                data_indices = new_data_indices
+            )
+
+
+        file_index = self.data_indices[idx]
 
         filename = self.udf[file_index]
         df = pd.read_pickle(filename)
@@ -74,11 +101,6 @@ class FractureDataset(Dataset):
 
         df = pd.read_pickle(self.impulse[file_index])
         impulse = df.values[0]
-
-        # pcd = pcd[start_index: start_index + self.chunk_size]
-        # udf = udf[start_index: start_index + self.chunk_size]
-        # label_gt = label_gt[start_index: start_index + self.chunk_size]
-        # label_edge = label_edge[start_index: start_index + self.chunk_size]
 
         pcd = torch.tensor(pcd, dtype=torch.float32)
         udf = torch.tensor(udf, dtype=torch.float32)
@@ -109,11 +131,7 @@ class FractureDataset(Dataset):
     def _prepare_data_indices(self):
         indices = []
         for file_index, path in self.udf.items():
-
-            num_points = pd.read_pickle(path).shape[0]
-            # for start_index in range(0, num_points - self.chunk_size, self.chunk_size):
-            #     indices.append((file_index, start_index))
-            indices.append((file_index, 0))
+            indices.append(file_index)
         return indices
 
 

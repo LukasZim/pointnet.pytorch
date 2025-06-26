@@ -17,6 +17,7 @@ from MLP.path import Path
 from MLP.segmentation_approaches.divergence import DivergenceSegmentation
 from MLP.segmentation_approaches.felzenszwalb.felzenszwalb import FelzensZwalbSegmentation
 from MLP.segmentation_approaches.hierarchical_clustering import HierarchicalClustering
+from MLP.segmentation_approaches.k_means import KMeans, K_Means
 from MLP.segmentation_approaches.region_growing import RegionGrowing, LocalExtremes
 from MLP.segmentation_approaches.watershed import Watershed
 from MLP.train import run_epoch
@@ -191,7 +192,7 @@ def visualize():
     predicted_udf = outputs.squeeze().tolist()
 
     predicted_udf = np.array(predicted_udf)
-    test_targets = np.array(test_targets)
+    test_targets = np.array(test_targets.cpu().numpy())
 
     mse = mean_squared_error(test_targets, predicted_udf)
     r2 = r2_score(test_targets, predicted_udf)
@@ -205,17 +206,24 @@ def visualize():
 
     # labels = segment_UDF(mesh, predicted_udf, test_targets)
     region_growing_time = time.time()
-    # div = DivergenceSegmentation(mesh, predicted_udf, test_targets, gradients[:,:3])
-    # labels_div = div.calculate_divergence()
+    div = DivergenceSegmentation(mesh, predicted_udf, test_targets, gradients[:,:3].cpu().numpy())
+    labels_div = div.calculate_divergence()
     # fzs = FelzensZwalbSegmentation(mesh, labels_div, test_targets, False)
     # # labels = fzs.segment(5, 20)
     #
     # labels = fzs.segment(500, 20)
-    watershed = Watershed(mesh, predicted_udf)
-    labels = watershed.calculate_watershed()
+    # watershed = Watershed(mesh, predicted_udf)
+    # labels = watershed.calculate_watershed()
+
+    # predicted_udf =  np.array([x if x < 0.3 else 0.3 for x in predicted_udf ])
+
+    k_means = K_Means(mesh, labels_div, 2)
+    labels = k_means.segment()
 
     # h_cluster = HierarchicalClustering(mesh, predicted_udf)
     # labels = h_cluster.calculate_hierarchical_clustering()
+
+    print(len(np.unique(labels)))
 
     # LE = LocalExtremes(mesh, test_targets, test_targets)
     # labels = LE.local_extremes()
