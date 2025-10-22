@@ -1,3 +1,4 @@
+import math
 import random
 import os
 
@@ -18,7 +19,12 @@ class FractureDataset(Dataset):
         self.root_directory = root_directory
         if data_indices is not None:
             self.data_indices = data_indices
-        for file in os.listdir(root_directory):
+        files = os.listdir(root_directory)
+        files = [f for f in files if f.split(".")[-1] == "pkl"]
+        files = sorted(files, key=lambda x: int(x.split(".")[0]) if len(x.split('.')[0].split('_')) == 1 else int(
+            x.split('.')[0].split('_')[0]))
+
+        for file in files:
             if not file.split(".")[-1] == "pkl":
                 continue
             without_filetype = file.split('.')[0]
@@ -40,13 +46,13 @@ class FractureDataset(Dataset):
     def _drop_if_wrong_type(self, index):
         if hasattr(self, "data_indices") and not index in self.data_indices:
             return False, -1
-        if index <= self.num_files_directory * 0.7 and self.dataset_type == "train":
+        if index < self.num_files_directory * 0.7 and self.dataset_type == "train":
             return True, index
 
-        if self.num_files_directory * 0.7 < index < self.num_files_directory * 0.85 and self.dataset_type == "test":
+        if self.num_files_directory * 0.7 <= index < self.num_files_directory * 0.85 and self.dataset_type == "test":
             return True, index - int(self.num_files_directory * 0.7) - 1
 
-        if index > self.num_files_directory * 0.85 and self.dataset_type == "validate":
+        if index >= self.num_files_directory * 0.85 and self.dataset_type == "validate":
             return True, index - int(self.num_files_directory * 0.85) - 1
 
         if self.dataset_type == "full":
@@ -102,21 +108,27 @@ class FractureDataset(Dataset):
         df = pd.read_pickle(self.impulse[file_index])
         impulse = df.values[0]
 
+        if any(math.isnan(x) for x in udf):
+            print(idx)
+
         pcd = torch.tensor(pcd, dtype=torch.float32)
         udf = torch.tensor(udf, dtype=torch.float32)
         impulse = torch.tensor(impulse, dtype=torch.float32)
+
+        if bool(torch.isnan(udf).any()):
+            print(idx)
 
         return pcd, udf, impulse, label_gt, label_edge
 
     def get_GT(self, idx):
 
-        df = pd.read_pickle(self.udf[idx])
+        df = pd.read_pickle(self.udf[self.data_indices[idx]])
         pcd = df.drop(["distance", "label", "edge_labels"], axis=1).values
         udf = df["distance"].values
         label_gt = df["label"].values
         label_edge = df['edge_labels'].values
 
-        df = pd.read_pickle(self.impulse[idx])
+        df = pd.read_pickle(self.impulse[self.data_indices[idx]])
         impulse = df.values[0]
 
         return pcd, udf, impulse, label_gt, label_edge
@@ -180,7 +192,11 @@ class FractureGeomDataset(InMemoryDataset):
         self.mesh_vertices = []
         self.mesh_triangles = []
         self.split = split
-        for file in os.listdir(os.path.join(root, self.used_dataset_name)):
+
+        files = os.listdir(os.path.join(root, self.used_dataset_name))
+        files = [f for f in files if f.split(".")[-1] == "pkl"]
+        files = sorted(files, key=lambda x: int(x.split(".")[0]) if len(x.split('.')[0].split('_')) == 1 else int(x.split('.')[0].split('_')[0]))
+        for file in files:
             if not file.split(".")[-1] == "pkl":
                 continue
             without_filetype = file.split('.')[0]
@@ -253,6 +269,7 @@ class FractureGeomDataset(InMemoryDataset):
             data.gt_label = torch.tensor(label_gt, dtype=torch.int64)
             data.impulse = torch.tensor(impulse, dtype=torch.float32)
             data.edge_label = torch.tensor(label_edge, dtype=torch.int64)
+            data.index = torch.tensor(file_index, dtype=torch.int64)
             # data.x = torch.tensor(impulse, dtype=torch.float32).repeat(udf.shape[0], 1)
             data.x = torch.cat((data.pos, torch.tensor(impulse, dtype=torch.float32).repeat(udf.shape[0], 1)), dim=1)
             if self.pre_filter is not None and not self.pre_filter(data):

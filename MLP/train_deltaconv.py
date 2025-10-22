@@ -24,26 +24,69 @@ from MLP.visualize import create_mesh_from_faces_and_vertices, load_mesh_from_fi
 
 
 def train_low_memory(num_epochs, train_loader, model=None, lf="adj_mae"):
+    torch.manual_seed(1)
+    device = torch.device('cuda')
+    model = model.to(device)
+    # if lf == "adj_mae":
+    #     loss_function = adjusted_l1_loss
+    # elif lf == "mae":
+    #     loss_function = l1_loss()
+    # elif lf == "adj_mse":
+    #     loss_function = adjusted_l2_loss
+    # elif lf == "mse":
+    #     loss_function = l2_loss()
+    # else:
+    #     loss_function = adjusted_l1_loss
 
-    model = model.to('cuda')
-    if lf == "adj_mae":
-        loss_function = adjusted_l1_loss
-    elif lf == "mae":
-        loss_function = l1_loss()
-    elif lf == "adj_mse":
-        loss_function = adjusted_l2_loss
-    elif lf == "mse":
-        loss_function = l2_loss()
-    else:
-        loss_function = adjusted_l1_loss
-
+    loss_function = adjusted_l1_loss
     optimizer = torch.optim.Adam(model.parameters(), lr=0.005)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
 
     for _ in tqdm(range(0, num_epochs )):
-        train_epoch(model, 'cuda', optimizer, train_loader, loss_function)
+        model.train()
+        _ = train_epoch(model, device, optimizer, train_loader, loss_function)
         scheduler.step()
+    model.eval()
+    return model
 
+
+def train_low_memory_test(epochs, train_loader, test_loader, validation_loader, model=None):
+
+    device = torch.device('cuda')
+
+
+    model = model.to('cuda')
+
+    loss_function = adjusted_l1_loss
+
+    # Setup optimizer and scheduler
+    optimizer = torch.optim.Adam(model.parameters(), lr=0.002)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.5)
+    # scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.5, patience=3, verbose=True)
+    # Train the model
+    # ---------------
+
+    for epoch in tqdm(range(0, epochs )):
+        print("train")
+        training_loss = train_epoch(model, device, optimizer, train_loader, loss_function)
+        # torch.cuda.empty_cache()
+        print("test")
+        # validation_accuracy, _ = evaluate(model, args.device, validation_loader, loss_function, )
+        # validation_accuracy = np.mean(validation_accuracy)
+        # torch.cuda.empty_cache()
+        # test_accuracy, _ = evaluate(model, args.device, test_loader, loss_function, )
+        # test_accuracy = np.mean(test_accuracy)
+
+
+
+        # torch.cuda.empty_cache()
+
+        scheduler.step()
+        # if epoch % 10 == 0:
+        #     visualize_model_output(model, test_loader, args.device, test_dataset)
+
+    # print("Test accuracy: {}".format(best_validation_test_score))
+    # visualize_model_output(model, test_loader, args.device, test_dataset)
     return model
 
 
@@ -98,23 +141,27 @@ def train(args, writer, train_loader, test_loader, validation_loader, validation
             validation_accuracy, _ = evaluate(model, args.device, validation_loader, loss_function, )
             validation_accuracy = np.mean(validation_accuracy)
             torch.cuda.empty_cache()
-
-            writer.add_scalar('training loss',
-                              training_loss,
-                              epoch)
-            writer.add_scalar('validation accuracy', validation_accuracy, epoch)
+            if writer is not None:
+                writer.add_scalar('training loss',
+                                  training_loss,
+                                  epoch)
+                writer.add_scalar('validation accuracy', validation_accuracy, epoch)
             test_accuracy, _ = evaluate(model, args.device, test_loader, loss_function, )
             test_accuracy = np.mean(test_accuracy)
-            writer.add_scalar('test accuracy', test_accuracy, epoch)
-            writer.add_scalars("Loss", {f"train_DC_{complexity}": training_loss,
+
+            if writer is not None:
+                writer.add_scalar('test accuracy', test_accuracy, epoch)
+                writer.add_scalars("Loss", {f"train_DC_{complexity}": training_loss,
                                                     f"Test_DC_{complexity}": validation_accuracy}, epoch)
             print("chamfer")
-            chamfer_value, num_non_fractures, _ = n_chamfer_values_deltaconv(chamfer_loader,
-                                       model,
-                                       num_chamfer_values=10, edge=True, visualize=False)
 
-            writer.add_scalar(f'DC_chamfer_{complexity}', chamfer_value, epoch)
-            writer.add_scalar(f'DC_non_fracture_{complexity}', num_non_fractures, epoch)
+            if writer is not None:
+                chamfer_value, num_non_fractures, _ = n_chamfer_values_deltaconv(chamfer_loader,
+                                           model,
+                                           num_chamfer_values=10, edge=True, visualize=False)
+
+                writer.add_scalar(f'DC_chamfer_{complexity}', chamfer_value, epoch)
+                writer.add_scalar(f'DC_non_fracture_{complexity}', num_non_fractures, epoch)
 
             torch.cuda.empty_cache()
             print("deltaconv validation and test accuracy: ", validation_accuracy, test_accuracy)

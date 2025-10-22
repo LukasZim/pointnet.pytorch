@@ -21,11 +21,11 @@ import deltaconv.transforms as T
 # create a function that takes complexity as input
 # and outputs a DeltaConv model of that complexity
 def create_DeltaConv_model(complexity):
-    return DeltaNetRegression(9, complexity * [64 * complexity], 2, embedding_size=200*complexity, num_neighbors=2 + complexity * 3, grad_regularizer=0.001, grad_kernel_width=1)
+    return DeltaNetRegression(9, 3 * [64*complexity], 2, embedding_size=600, num_neighbors=20, grad_regularizer=0.001, grad_kernel_width=1)
 
 if __name__ == '__main__':
     # set some global variables
-    max_epochs = 200
+    max_epochs = 100
     dataset_name = "bunny"
 
 

@@ -208,5 +208,6 @@ def train_model(num_epochs, complexity, model, tensorboard_writer, mesh, train_d
 def train_model_low_memory(num_epochs, model, train_dataloader, loss_function=adjusted_l1_loss):
     optimizer = torch.optim.Adam(model.parameters(), lr=0.0001)
     for _ in tqdm(range(0, num_epochs)):
-        run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
+        loss, _ , _ = run_epoch(model, train_dataloader, optimizer, loss_function, train=True)
+        print(loss)
     return model

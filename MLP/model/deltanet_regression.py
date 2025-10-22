@@ -48,42 +48,55 @@ class DeltaNetRegression(torch.nn.Module):
 
     def forward(self, data):
         # print("=====================")
-        # time_start = time.time()
+
         # torch.cuda.synchronize()
+        # time_start = time.time()
+
         conv_out = self.deltanet_base(data)
-        # torch.cuda.synchronize()
-        # print(time.time() - time_start)
 
-        # time_start = time.time()
         # torch.cuda.synchronize()
+        # print("deltanet_base: ", (time.time() - time_start)*1000)
+        #
+        # torch.cuda.synchronize()
+        # time_start = time.time()
+
         x = torch.cat(conv_out, dim=1)
-        # torch.cuda.synchronize()
-        # print(time.time() - time_start)
 
-        # time_start = time.time()
         # torch.cuda.synchronize()
+        # print("concat: ", (time.time() - time_start)*1000)
+        #
+        # torch.cuda.synchronize()
+        # time_start = time.time()
+
         x = self.lin_global(x)
-        # torch.cuda.synchronize()
-        # print(time.time() - time_start)
 
-        # time_start = time.time()
         # torch.cuda.synchronize()
+        # print("mlp_global_embed: ", (time.time() - time_start)*1000)
+        #
+        # torch.cuda.synchronize()
+        # time_start = time.time()
+
         batch = data.batch
         x_max = global_max_pool(x, batch)[batch]
-        # torch.cuda.synchronize()
-        # print(time.time() - time_start)
 
-        # time_start = time.time()
         # torch.cuda.synchronize()
+        # print("pooling:", (time.time() - time_start)*1000)
+        #
+        # torch.cuda.synchronize()
+        # time_start = time.time()
+
         x = torch.cat([x_max] + conv_out, dim=1)
-        # torch.cuda.synchronize()
-        # print(time.time() - time_start)
 
+        # torch.cuda.synchronize()
+        # print("concat2: ", (time.time() - time_start)*1000)
+        #
+        # torch.cuda.synchronize()
         # time_start = time.time()
-        # torch.cuda.synchronize()
+
         p = self.segmentation_head(x)
+
         # torch.cuda.synchronize()
-        # print(time.time() - time_start)
+        # print("mlp_output: ", (time.time() - time_start)*1000)
         # print("===============================")
 
         return p
